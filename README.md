@@ -14,3 +14,14 @@ cargo run --release examples/test_features.lux
 # Start REPL
 ./target/release/lux
 ```
+
+
+
+TODO: Add documentation for the language syntax and features
+TODO: Add documentation for the language standard library
+TODO: Add Typing Enforcement
+TODO: Add tests for the language features
+TODO: Add more examples
+TODO: Semantic Analysis
+TODO: Async Runtime
+TODO: VS Code Plugin
