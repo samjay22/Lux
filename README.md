@@ -15,7 +15,7 @@ cargo run --release examples/test_features.lux
 ./target/release/lux
 ```
 
-
+```
 
 TODO: Add documentation for the language syntax and features
 TODO: Add documentation for the language standard library
@@ -25,3 +25,5 @@ TODO: Add more examples
 TODO: Semantic Analysis
 TODO: Async Runtime
 TODO: VS Code Plugin
+
+```
