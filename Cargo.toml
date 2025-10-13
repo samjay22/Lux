@@ -1,0 +1,30 @@
+[package]
+name = "lux-lang"
+version = "0.1.0"
+edition = "2021"
+authors = ["Samuel Taylor"]
+description = "A custom programming language with Lua-like syntax, Go-like static typing, and built-in async support"
+license = "MIT"
+
+[dependencies]
+# For better error messages and diagnostics
+colored = "2.1"
+# For async runtime (will be used in later phases)
+tokio = { version = "1.35", features = ["full"], optional = true }
+
+[dev-dependencies]
+# For testing
+pretty_assertions = "1.4"
+
+[features]
+default = []
+async-runtime = ["tokio"]
+
+[[bin]]
+name = "lux"
+path = "src/main.rs"
+
+[lib]
+name = "lux_lang"
+path = "src/lib.rs"
+

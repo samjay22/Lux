@@ -1,0 +1,19 @@
+// Simple metatable test
+
+local vec1: table = {x = 10, y = 20}
+local vec2: table = {x = 5, y = 15}
+
+local vectorMeta: table = {
+    __add = fn(a: table, b: table) -> table {
+        return {x = a.x + b.x, y = a.y + b.y}
+    }
+}
+
+setmetatable(vec1, vectorMeta)
+setmetatable(vec2, vectorMeta)
+
+print("Vectors created with metatables")
+print("vec1.x = ")
+print(vec1.x)
+print("vec2.x = ")
+print(vec2.x)

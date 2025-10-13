@@ -1,0 +1,17 @@
+// Simple hello world
+local greeting: string = "Hello, Lux!"
+print(greeting)
+
+local a : int = 1
+local b := 2
+local c := a + b
+print(c)
+
+
+local tab : table = {
+    a = 1 + 3
+}
+
+print(tab.a)
+
+print(setmetatable({}, {__index = {a = 1}}))

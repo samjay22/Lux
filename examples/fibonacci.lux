@@ -1,0 +1,30 @@
+// Fibonacci sequence calculator
+// Demonstrates functions, loops, and type inference
+
+fn fibonacci(n: int) -> int {
+    if n <= 1 {
+        return n
+    }
+
+    local a := 0
+    local b := 1
+    local i := 2
+
+    while i <= n {
+        local temp := a + b
+        a = b
+        b = temp
+        i = i + 1
+    }
+
+    return b
+}
+
+fn main() {
+    // Calculate first 10 fibonacci numbers
+    for i := 0; i < 10; i = i + 1 {
+        local result := fibonacci(i)
+        print(result)
+    }
+}
+
