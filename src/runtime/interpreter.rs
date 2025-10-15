@@ -8,6 +8,8 @@ use crate::error::{LuxError, LuxResult, SourceLocation};
 use crate::parser::ast::{Ast, Stmt, Expr, BinaryOp, UnaryOp, LogicalOp, Literal, TableKey};
 use crate::async_runtime::{AsyncExecutor, TaskState};
 use super::value::{Value, TableValue, FunctionValue, NativeFunctionValue};
+use crate::lexer::Lexer;
+use crate::parser::Parser;
 
 /// Environment for variable storage
 #[derive(Debug, Clone)]
@@ -72,6 +74,8 @@ pub struct Interpreter {
     env: Environment,
     control_flow: ControlFlow,
     executor: Arc<AsyncExecutor>,
+    loaded_modules: HashMap<String, bool>,
+    current_file_dir: Option<String>,
 }
 
 impl Interpreter {
@@ -80,6 +84,8 @@ impl Interpreter {
             env: Environment::new(),
             control_flow: ControlFlow::None,
             executor: Arc::new(AsyncExecutor::new()),
+            loaded_modules: HashMap::new(),
+            current_file_dir: None,
         };
         interpreter.register_builtins();
         interpreter
@@ -135,6 +141,652 @@ impl Interpreter {
                 },
             }),
         );
+
+        // read_file function
+        self.env.define(
+            "read_file".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "read_file".to_string(),
+                arity: 1,
+                func: |args| {
+                    if let Value::String(path) = &args[0] {
+                        match std::fs::read_to_string(path) {
+                            Ok(content) => Ok(Value::String(content)),
+                            Err(e) => Err(format!("Failed to read file '{}': {}", path, e)),
+                        }
+                    } else {
+                        Err("read_file expects a string path".to_string())
+                    }
+                },
+            }),
+        );
+
+        // write_file function
+        self.env.define(
+            "write_file".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "write_file".to_string(),
+                arity: 2,
+                func: |args| {
+                    if let (Value::String(path), Value::String(content)) = (&args[0], &args[1]) {
+                        match std::fs::write(path, content) {
+                            Ok(_) => Ok(Value::Nil),
+                            Err(e) => Err(format!("Failed to write file '{}': {}", path, e)),
+                        }
+                    } else {
+                        Err("write_file expects two strings (path, content)".to_string())
+                    }
+                },
+            }),
+        );
+
+        // string_split function
+        self.env.define(
+            "string_split".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "string_split".to_string(),
+                arity: 2,
+                func: |args| {
+                    if let (Value::String(text), Value::String(delimiter)) = (&args[0], &args[1]) {
+                        let parts: Vec<Value> = text
+                            .split(delimiter.as_str())
+                            .map(|s| Value::String(s.to_string()))
+                            .collect();
+                        let mut table = TableValue::new();
+                        table.array = parts;
+                        Ok(Value::Table(table))
+                    } else {
+                        Err("string_split expects two strings (text, delimiter)".to_string())
+                    }
+                },
+            }),
+        );
+
+        // string_contains function
+        self.env.define(
+            "string_contains".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "string_contains".to_string(),
+                arity: 2,
+                func: |args| {
+                    if let (Value::String(text), Value::String(pattern)) = (&args[0], &args[1]) {
+                        Ok(Value::Bool(text.contains(pattern.as_str())))
+                    } else {
+                        Err("string_contains expects two strings (text, pattern)".to_string())
+                    }
+                },
+            }),
+        );
+
+        // string_starts_with function
+        self.env.define(
+            "string_starts_with".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "string_starts_with".to_string(),
+                arity: 2,
+                func: |args| {
+                    if let (Value::String(text), Value::String(prefix)) = (&args[0], &args[1]) {
+                        Ok(Value::Bool(text.starts_with(prefix.as_str())))
+                    } else {
+                        Err("string_starts_with expects two strings (text, prefix)".to_string())
+                    }
+                },
+            }),
+        );
+
+        // string_trim function
+        self.env.define(
+            "string_trim".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "string_trim".to_string(),
+                arity: 1,
+                func: |args| {
+                    if let Value::String(text) = &args[0] {
+                        Ok(Value::String(text.trim().to_string()))
+                    } else {
+                        Err("string_trim expects a string".to_string())
+                    }
+                },
+            }),
+        );
+
+        // string_length function
+        self.env.define(
+            "string_length".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "string_length".to_string(),
+                arity: 1,
+                func: |args| {
+                    if let Value::String(text) = &args[0] {
+                        Ok(Value::Int(text.len() as i64))
+                    } else {
+                        Err("string_length expects a string".to_string())
+                    }
+                },
+            }),
+        );
+
+        // table_length function (for arrays)
+        self.env.define(
+            "table_length".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "table_length".to_string(),
+                arity: 1,
+                func: |args| {
+                    if let Value::Table(table) = &args[0] {
+                        Ok(Value::Int(table.array.len() as i64))
+                    } else {
+                        Err("table_length expects a table".to_string())
+                    }
+                },
+            }),
+        );
+
+        // table_push function
+        self.env.define(
+            "table_push".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "table_push".to_string(),
+                arity: 2,
+                func: |args| {
+                    if let Value::Table(mut table) = args[0].clone() {
+                        table.array.push(args[1].clone());
+                        Ok(Value::Table(table))
+                    } else {
+                        Err("table_push expects a table as first argument".to_string())
+                    }
+                },
+            }),
+        );
+
+        // parse_lux function - parses Lux source code and returns AST as table
+        self.env.define(
+            "parse_lux".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "parse_lux".to_string(),
+                arity: 1,
+                func: |args| {
+                    if let Value::String(source) = &args[0] {
+                        // Tokenize
+                        let mut lexer = Lexer::new(source.as_str(), None);
+                        let tokens = match lexer.tokenize() {
+                            Ok(t) => t,
+                            Err(e) => return Err(format!("Lexer error: {}", e)),
+                        };
+
+                        // Parse
+                        let mut parser = Parser::new(tokens);
+                        let ast = match parser.parse() {
+                            Ok(a) => a,
+                            Err(e) => return Err(format!("Parser error: {}", e)),
+                        };
+
+                        // Convert AST to table structure
+                        Ok(Interpreter::ast_to_value(&ast))
+                    } else {
+                        Err("parse_lux expects a string (source code)".to_string())
+                    }
+                },
+            }),
+        );
+
+        // type_of(value) -> string
+        self.env.define(
+            "type_of".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "type_of".to_string(),
+                arity: 1,
+                func: |args| {
+                    let type_name = match &args[0] {
+                        Value::Int(_) => "int",
+                        Value::Float(_) => "float",
+                        Value::String(_) => "string",
+                        Value::Bool(_) => "bool",
+                        Value::Nil => "nil",
+                        Value::Table(_) => "table",
+                        Value::Function(_) => "function",
+                        Value::NativeFunction(_) => "function",
+                        Value::Pointer(_) => "pointer",
+                    };
+                    Ok(Value::String(type_name.to_string()))
+                },
+            }),
+        );
+
+        // to_string(value) -> string
+        self.env.define(
+            "to_string".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "to_string".to_string(),
+                arity: 1,
+                func: |args| {
+                    let s = match &args[0] {
+                        Value::Int(i) => i.to_string(),
+                        Value::Float(f) => f.to_string(),
+                        Value::String(s) => s.clone(),
+                        Value::Bool(b) => b.to_string(),
+                        Value::Nil => "nil".to_string(),
+                        _ => format!("{:?}", args[0]),
+                    };
+                    Ok(Value::String(s))
+                },
+            }),
+        );
+
+        // to_int(value) -> int
+        self.env.define(
+            "to_int".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "to_int".to_string(),
+                arity: 1,
+                func: |args| {
+                    match &args[0] {
+                        Value::Int(i) => Ok(Value::Int(*i)),
+                        Value::Float(f) => Ok(Value::Int(*f as i64)),
+                        Value::String(s) => {
+                            s.parse::<i64>()
+                                .map(Value::Int)
+                                .map_err(|_| format!("Cannot convert '{}' to int", s))
+                        }
+                        Value::Bool(b) => Ok(Value::Int(if *b { 1 } else { 0 })),
+                        _ => Err("Cannot convert to int".to_string()),
+                    }
+                },
+            }),
+        );
+
+        // to_float(value) -> float
+        self.env.define(
+            "to_float".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "to_float".to_string(),
+                arity: 1,
+                func: |args| {
+                    match &args[0] {
+                        Value::Int(i) => Ok(Value::Float(*i as f64)),
+                        Value::Float(f) => Ok(Value::Float(*f)),
+                        Value::String(s) => {
+                            s.parse::<f64>()
+                                .map(Value::Float)
+                                .map_err(|_| format!("Cannot convert '{}' to float", s))
+                        }
+                        _ => Err("Cannot convert to float".to_string()),
+                    }
+                },
+            }),
+        );
+
+        // substring(text: string, start: int, length: int) -> string
+        self.env.define(
+            "substring".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "substring".to_string(),
+                arity: 3,
+                func: |args| {
+                    if let (Value::String(text), Value::Int(start), Value::Int(length)) = (&args[0], &args[1], &args[2]) {
+                        let start = *start as usize;
+                        let length = *length as usize;
+                        let chars: Vec<char> = text.chars().collect();
+
+                        if start >= chars.len() {
+                            return Ok(Value::String(String::new()));
+                        }
+
+                        let end = std::cmp::min(start + length, chars.len());
+                        let result: String = chars[start..end].iter().collect();
+                        Ok(Value::String(result))
+                    } else {
+                        Err("substring expects (string, int, int)".to_string())
+                    }
+                },
+            }),
+        );
+
+        // string_replace(text: string, from: string, to: string) -> string
+        self.env.define(
+            "string_replace".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "string_replace".to_string(),
+                arity: 3,
+                func: |args| {
+                    if let (Value::String(text), Value::String(from), Value::String(to)) = (&args[0], &args[1], &args[2]) {
+                        Ok(Value::String(text.replace(from, to)))
+                    } else {
+                        Err("string_replace expects (string, string, string)".to_string())
+                    }
+                },
+            }),
+        );
+
+        // string_upper(text: string) -> string
+        self.env.define(
+            "string_upper".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "string_upper".to_string(),
+                arity: 1,
+                func: |args| {
+                    if let Value::String(text) = &args[0] {
+                        Ok(Value::String(text.to_uppercase()))
+                    } else {
+                        Err("string_upper expects a string".to_string())
+                    }
+                },
+            }),
+        );
+
+        // string_lower(text: string) -> string
+        self.env.define(
+            "string_lower".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "string_lower".to_string(),
+                arity: 1,
+                func: |args| {
+                    if let Value::String(text) = &args[0] {
+                        Ok(Value::String(text.to_lowercase()))
+                    } else {
+                        Err("string_lower expects a string".to_string())
+                    }
+                },
+            }),
+        );
+
+        // string_ends_with(text: string, suffix: string) -> bool
+        self.env.define(
+            "string_ends_with".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "string_ends_with".to_string(),
+                arity: 2,
+                func: |args| {
+                    if let (Value::String(text), Value::String(suffix)) = (&args[0], &args[1]) {
+                        Ok(Value::Bool(text.ends_with(suffix)))
+                    } else {
+                        Err("string_ends_with expects (string, string)".to_string())
+                    }
+                },
+            }),
+        );
+
+        // Math functions
+        // sqrt(x: float) -> float
+        self.env.define(
+            "sqrt".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "sqrt".to_string(),
+                arity: 1,
+                func: |args| {
+                    let num = match &args[0] {
+                        Value::Float(f) => *f,
+                        Value::Int(i) => *i as f64,
+                        _ => return Err("sqrt expects a number".to_string()),
+                    };
+                    Ok(Value::Float(num.sqrt()))
+                },
+            }),
+        );
+
+        // pow(base: float, exp: float) -> float
+        self.env.define(
+            "pow".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "pow".to_string(),
+                arity: 2,
+                func: |args| {
+                    let base = match &args[0] {
+                        Value::Float(f) => *f,
+                        Value::Int(i) => *i as f64,
+                        _ => return Err("pow expects numbers".to_string()),
+                    };
+                    let exp = match &args[1] {
+                        Value::Float(f) => *f,
+                        Value::Int(i) => *i as f64,
+                        _ => return Err("pow expects numbers".to_string()),
+                    };
+                    Ok(Value::Float(base.powf(exp)))
+                },
+            }),
+        );
+
+        // abs(x: number) -> number
+        self.env.define(
+            "abs".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "abs".to_string(),
+                arity: 1,
+                func: |args| {
+                    match &args[0] {
+                        Value::Int(i) => Ok(Value::Int(i.abs())),
+                        Value::Float(f) => Ok(Value::Float(f.abs())),
+                        _ => Err("abs expects a number".to_string()),
+                    }
+                },
+            }),
+        );
+
+        // floor(x: float) -> int
+        self.env.define(
+            "floor".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "floor".to_string(),
+                arity: 1,
+                func: |args| {
+                    let num = match &args[0] {
+                        Value::Float(f) => *f,
+                        Value::Int(i) => return Ok(Value::Int(*i)),
+                        _ => return Err("floor expects a number".to_string()),
+                    };
+                    Ok(Value::Int(num.floor() as i64))
+                },
+            }),
+        );
+
+        // ceil(x: float) -> int
+        self.env.define(
+            "ceil".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "ceil".to_string(),
+                arity: 1,
+                func: |args| {
+                    let num = match &args[0] {
+                        Value::Float(f) => *f,
+                        Value::Int(i) => return Ok(Value::Int(*i)),
+                        _ => return Err("ceil expects a number".to_string()),
+                    };
+                    Ok(Value::Int(num.ceil() as i64))
+                },
+            }),
+        );
+
+        // min(a: number, b: number) -> number
+        self.env.define(
+            "min".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "min".to_string(),
+                arity: 2,
+                func: |args| {
+                    match (&args[0], &args[1]) {
+                        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(*a.min(b))),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.min(*b))),
+                        (Value::Int(a), Value::Float(b)) => Ok(Value::Float((*a as f64).min(*b))),
+                        (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a.min(*b as f64))),
+                        _ => Err("min expects two numbers".to_string()),
+                    }
+                },
+            }),
+        );
+
+        // max(a: number, b: number) -> number
+        self.env.define(
+            "max".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "max".to_string(),
+                arity: 2,
+                func: |args| {
+                    match (&args[0], &args[1]) {
+                        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(*a.max(b))),
+                        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.max(*b))),
+                        (Value::Int(a), Value::Float(b)) => Ok(Value::Float((*a as f64).max(*b))),
+                        (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a.max(*b as f64))),
+                        _ => Err("max expects two numbers".to_string()),
+                    }
+                },
+            }),
+        );
+    }
+
+    /// Convert AST to a Value (table structure) that Lux code can work with
+    fn ast_to_value(ast: &Ast) -> Value {
+        let mut table = TableValue::new();
+
+        // Convert statements to array
+        for stmt in &ast.statements {
+            table.array.push(Self::stmt_to_value(stmt));
+        }
+
+        Value::Table(table)
+    }
+
+    fn stmt_to_value(stmt: &Stmt) -> Value {
+        let mut table = TableValue::new();
+
+        match stmt {
+            Stmt::VarDecl { name, type_annotation, initializer, .. } => {
+                table.fields.insert("type".to_string(), Value::String("VarDecl".to_string()));
+                table.fields.insert("name".to_string(), Value::String(name.clone()));
+                if let Some(vt) = type_annotation {
+                    table.fields.insert("type_annotation".to_string(), Value::String(format!("{:?}", vt)));
+                }
+                if let Some(init) = initializer {
+                    table.fields.insert("initializer".to_string(), Self::expr_to_value(init));
+                }
+            }
+            Stmt::FunctionDecl { name, params, return_type, body, is_async, .. } => {
+                table.fields.insert("type".to_string(), Value::String("FunctionDecl".to_string()));
+                table.fields.insert("name".to_string(), Value::String(name.clone()));
+                table.fields.insert("is_async".to_string(), Value::Bool(*is_async));
+
+                let mut params_table = TableValue::new();
+                for (param_name, param_type) in params {
+                    let mut param_table = TableValue::new();
+                    param_table.fields.insert("name".to_string(), Value::String(param_name.clone()));
+                    param_table.fields.insert("type".to_string(), Value::String(format!("{:?}", param_type)));
+                    params_table.array.push(Value::Table(param_table));
+                }
+                table.fields.insert("params".to_string(), Value::Table(params_table));
+
+                if let Some(rt) = return_type {
+                    table.fields.insert("return_type".to_string(), Value::String(format!("{:?}", rt)));
+                }
+
+                let mut body_table = TableValue::new();
+                for s in body {
+                    body_table.array.push(Self::stmt_to_value(s));
+                }
+                table.fields.insert("body".to_string(), Value::Table(body_table));
+            }
+            Stmt::Return { value, .. } => {
+                table.fields.insert("type".to_string(), Value::String("Return".to_string()));
+                if let Some(v) = value {
+                    table.fields.insert("value".to_string(), Self::expr_to_value(v));
+                }
+            }
+            Stmt::Expression { expr, .. } => {
+                table.fields.insert("type".to_string(), Value::String("Expression".to_string()));
+                table.fields.insert("expr".to_string(), Self::expr_to_value(expr));
+            }
+            Stmt::If { condition, then_branch, else_branch, .. } => {
+                table.fields.insert("type".to_string(), Value::String("If".to_string()));
+                table.fields.insert("condition".to_string(), Self::expr_to_value(condition));
+
+                let mut then_table = TableValue::new();
+                for s in then_branch {
+                    then_table.array.push(Self::stmt_to_value(s));
+                }
+                table.fields.insert("then_branch".to_string(), Value::Table(then_table));
+
+                if let Some(else_b) = else_branch {
+                    let mut else_table = TableValue::new();
+                    for s in else_b {
+                        else_table.array.push(Self::stmt_to_value(s));
+                    }
+                    table.fields.insert("else_branch".to_string(), Value::Table(else_table));
+                }
+            }
+            Stmt::While { condition, body, .. } => {
+                table.fields.insert("type".to_string(), Value::String("While".to_string()));
+                table.fields.insert("condition".to_string(), Self::expr_to_value(condition));
+
+                let mut body_table = TableValue::new();
+                for s in body {
+                    body_table.array.push(Self::stmt_to_value(s));
+                }
+                table.fields.insert("body".to_string(), Value::Table(body_table));
+            }
+            Stmt::For { initializer, condition, increment, body, .. } => {
+                table.fields.insert("type".to_string(), Value::String("For".to_string()));
+                if let Some(i) = initializer {
+                    table.fields.insert("initializer".to_string(), Self::stmt_to_value(i));
+                }
+                if let Some(c) = condition {
+                    table.fields.insert("condition".to_string(), Self::expr_to_value(c));
+                }
+                if let Some(inc) = increment {
+                    table.fields.insert("increment".to_string(), Self::expr_to_value(inc));
+                }
+
+                let mut body_table = TableValue::new();
+                for s in body {
+                    body_table.array.push(Self::stmt_to_value(s));
+                }
+                table.fields.insert("body".to_string(), Value::Table(body_table));
+            }
+            _ => {
+                table.fields.insert("type".to_string(), Value::String(format!("{:?}", stmt)));
+            }
+        }
+
+        Value::Table(table)
+    }
+
+    fn expr_to_value(expr: &Expr) -> Value {
+        let mut table = TableValue::new();
+
+        match expr {
+            Expr::Literal { value, .. } => {
+                table.fields.insert("type".to_string(), Value::String("Literal".to_string()));
+                match value {
+                    Literal::Integer(i) => table.fields.insert("value".to_string(), Value::Int(*i)),
+                    Literal::Float(f) => table.fields.insert("value".to_string(), Value::Float(*f)),
+                    Literal::String(s) => table.fields.insert("value".to_string(), Value::String(s.clone())),
+                    Literal::Boolean(b) => table.fields.insert("value".to_string(), Value::Bool(*b)),
+                    Literal::Nil => table.fields.insert("value".to_string(), Value::Nil),
+                };
+            }
+            Expr::Variable { name, .. } => {
+                table.fields.insert("type".to_string(), Value::String("Variable".to_string()));
+                table.fields.insert("name".to_string(), Value::String(name.clone()));
+            }
+            Expr::Binary { left, operator, right, .. } => {
+                table.fields.insert("type".to_string(), Value::String("Binary".to_string()));
+                table.fields.insert("operator".to_string(), Value::String(format!("{:?}", operator)));
+                table.fields.insert("left".to_string(), Self::expr_to_value(left));
+                table.fields.insert("right".to_string(), Self::expr_to_value(right));
+            }
+            Expr::Call { callee, arguments, .. } => {
+                table.fields.insert("type".to_string(), Value::String("Call".to_string()));
+                table.fields.insert("callee".to_string(), Self::expr_to_value(callee));
+
+                let mut args_table = TableValue::new();
+                for arg in arguments {
+                    args_table.array.push(Self::expr_to_value(arg));
+                }
+                table.fields.insert("arguments".to_string(), Value::Table(args_table));
+            }
+            _ => {
+                table.fields.insert("type".to_string(), Value::String(format!("{:?}", expr)));
+            }
+        }
+
+        Value::Table(table)
     }
 
     pub fn interpret(&mut self, ast: &Ast) -> LuxResult<()> {
@@ -187,8 +839,83 @@ impl Interpreter {
         Ok(return_value)
     }
 
+    fn import_module(&mut self, path: &str, location: &SourceLocation) -> LuxResult<()> {
+        // Check if already loaded
+        if self.loaded_modules.contains_key(path) {
+            return Ok(());
+        }
+
+        // Resolve the module path
+        let resolved_path = self.resolve_module_path(path, location)?;
+
+        // Read the file
+        let source = std::fs::read_to_string(&resolved_path)
+            .map_err(|e| LuxError::runtime_error(
+                format!("Failed to read module '{}': {}", path, e),
+                Some(location.clone()),
+            ))?;
+
+        // Parse the module
+        let mut lexer = Lexer::new(&source, Some(&resolved_path));
+        let tokens = lexer.tokenize()?;
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse()?;
+
+        // Execute the module in the current environment
+        for stmt in &ast.statements {
+            self.execute_stmt(stmt)?;
+        }
+
+        // Mark as loaded
+        self.loaded_modules.insert(path.to_string(), true);
+
+        Ok(())
+    }
+
+    fn resolve_module_path(&self, path: &str, location: &SourceLocation) -> LuxResult<String> {
+        use std::path::Path;
+
+        // Try different locations:
+        // 1. Relative to current file directory
+        if let Some(ref current_dir) = self.current_file_dir {
+            let candidate = Path::new(current_dir).join(format!("{}.lux", path));
+            if candidate.exists() {
+                return Ok(candidate.to_string_lossy().to_string());
+            }
+        }
+
+        // 2. In lib/ directory
+        let lib_path = Path::new("lib").join(format!("{}.lux", path));
+        if lib_path.exists() {
+            return Ok(lib_path.to_string_lossy().to_string());
+        }
+
+        // 3. In tools/ directory
+        let tools_path = Path::new("tools").join(format!("{}.lux", path));
+        if tools_path.exists() {
+            return Ok(tools_path.to_string_lossy().to_string());
+        }
+
+        // 4. As absolute or relative path with .lux extension
+        let direct_path_str = format!("{}.lux", path);
+        let direct_path = Path::new(&direct_path_str);
+        if direct_path.exists() {
+            return Ok(direct_path.to_string_lossy().to_string());
+        }
+
+        Err(LuxError::runtime_error(
+            format!("Module '{}' not found", path),
+            Some(location.clone()),
+        ))
+    }
+
     fn execute_stmt(&mut self, stmt: &Stmt) -> LuxResult<()> {
         match stmt {
+            Stmt::Import { path, location } => {
+                self.import_module(path, location)?;
+                Ok(())
+            }
+
             Stmt::VarDecl { name, initializer, location, .. } => {
                 let value = if let Some(init) = initializer {
                     self.eval_expr(init)?
@@ -560,6 +1287,8 @@ impl Interpreter {
                                                         env,
                                                         control_flow: ControlFlow::None,
                                                         executor: executor.clone(),
+                                                        loaded_modules: HashMap::new(),
+                                                        current_file_dir: None,
                                                     };
                                                     task_interp.execute_task(tid, func, args)
                                                 });
@@ -601,6 +1330,8 @@ impl Interpreter {
                                                         env,
                                                         control_flow: ControlFlow::None,
                                                         executor: executor.clone(),
+                                                        loaded_modules: HashMap::new(),
+                                                        current_file_dir: None,
                                                     };
                                                     task_interp.execute_task(tid, func, args)
                                                 });
@@ -774,6 +1505,27 @@ impl Interpreter {
                     Value::String(s) => Ok(Value::Int(s.len() as i64)),
                     _ => Err(LuxError::runtime_error(
                         format!("Cannot get length of {}", operand.type_name()),
+                        Some(location.clone()),
+                    )),
+                }
+            }
+            UnaryOp::AddressOf => {
+                // Create a pointer to the value
+                use std::sync::{Arc, Mutex};
+                Ok(Value::Pointer(Arc::new(Mutex::new(operand))))
+            }
+            UnaryOp::Dereference => {
+                // Dereference a pointer
+                match operand {
+                    Value::Pointer(ptr) => {
+                        let guard = ptr.lock().map_err(|_| LuxError::runtime_error(
+                            "Failed to lock pointer (poisoned mutex)".to_string(),
+                            Some(location.clone()),
+                        ))?;
+                        Ok(guard.clone())
+                    }
+                    _ => Err(LuxError::runtime_error(
+                        format!("Cannot dereference non-pointer type {}", operand.type_name()),
                         Some(location.clone()),
                     )),
                 }

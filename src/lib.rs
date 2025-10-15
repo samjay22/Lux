@@ -20,7 +20,6 @@ pub mod error;
 pub mod lexer;
 pub mod parser;
 pub mod types;
-pub mod semantic;
 pub mod runtime;
 pub mod async_runtime;
 

@@ -61,6 +61,7 @@ pub enum TokenType {
 
     // Unary operators
     Hash,           // # (length operator, Lua-style)
+    Ampersand,      // & (address-of operator)
 
     // Delimiters
     LeftParen,      // (
@@ -120,6 +121,9 @@ pub enum Keyword {
     And,
     Or,
     Not,
+
+    // Modules
+    Import,
 }
 
 impl Keyword {
@@ -150,6 +154,7 @@ impl Keyword {
             "and" => Some(Self::And),
             "or" => Some(Self::Or),
             "not" => Some(Self::Not),
+            "import" => Some(Self::Import),
             _ => None,
         }
     }
@@ -181,6 +186,7 @@ impl Keyword {
             Self::And => "and",
             Self::Or => "or",
             Self::Not => "not",
+            Self::Import => "import",
         }
     }
 }
@@ -233,6 +239,7 @@ impl fmt::Display for TokenType {
             Self::Colon => write!(f, ":"),
             Self::Semicolon => write!(f, ";"),
             Self::Arrow => write!(f, "->"),
+            Self::Ampersand => write!(f, "&"),
             Self::Newline => write!(f, "newline"),
             Self::Eof => write!(f, "EOF"),
         }

@@ -78,6 +78,7 @@ impl Lexer {
             '*' => self.add_token(TokenType::Star),
             '%' => self.add_token(TokenType::Percent),
             '#' => self.add_token(TokenType::Hash),
+            '&' => self.add_token(TokenType::Ampersand),
 
             // Two-character tokens
             '-' => {

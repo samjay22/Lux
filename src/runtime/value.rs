@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::{Arc, Mutex};
 
 /// Runtime value
 #[derive(Debug, Clone)]
@@ -16,6 +17,7 @@ pub enum Value {
     Table(TableValue),
     Function(FunctionValue),
     NativeFunction(NativeFunctionValue),
+    Pointer(Arc<Mutex<Value>>),
 }
 
 /// Table value (Lua-style associative array)
@@ -109,6 +111,7 @@ impl Value {
             Value::Table(_) => "table",
             Value::Function(_) => "function",
             Value::NativeFunction(_) => "function",
+            Value::Pointer(_) => "pointer",
         }
     }
 }
@@ -139,6 +142,13 @@ impl fmt::Display for Value {
             }
             Value::Function(func) => write!(f, "<fn {}>", func.name),
             Value::NativeFunction(func) => write!(f, "<native fn {}>", func.name),
+            Value::Pointer(ptr) => {
+                if let Ok(guard) = ptr.lock() {
+                    write!(f, "<pointer to {}>", guard.type_name())
+                } else {
+                    write!(f, "<pointer (locked)>")
+                }
+            }
         }
     }
 }

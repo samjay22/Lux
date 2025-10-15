@@ -1,0 +1,90 @@
+// Pointer test example
+// Demonstrates pointer operations in Lux
+
+fn main() {
+    print("\n")
+    print("╔════════════════════════════════════╗\n")
+    print("║  Pointer Operations Test           ║\n")
+    print("╚════════════════════════════════════╝\n")
+    print("\n")
+
+    // Basic pointer operations
+    print("=== Basic Pointers ===\n")
+    local x := 42
+    local ptr: *int = &x
+    
+    print("x = ")
+    print(to_string(x))
+    print("\n")
+    
+    print("ptr = ")
+    print(to_string(ptr))
+    print("\n")
+    
+    print("*ptr = ")
+    print(to_string(*ptr))
+    print("\n\n")
+
+    // Pointer to string
+    print("=== String Pointers ===\n")
+    local message := "Hello, Lux!"
+    local str_ptr: *string = &message
+    
+    print("message = ")
+    print(message)
+    print("\n")
+    
+    print("*str_ptr = ")
+    print(*str_ptr)
+    print("\n\n")
+
+    // Pointer type checking
+    print("=== Type Checking ===\n")
+    print("type_of(x) = ")
+    print(type_of(x))
+    print("\n")
+    
+    print("type_of(ptr) = ")
+    print(type_of(ptr))
+    print("\n")
+    
+    print("type_of(*ptr) = ")
+    print(type_of(*ptr))
+    print("\n\n")
+
+    // Multiple pointers to same value
+    print("=== Shared Pointers ===\n")
+    local value := 100
+    local ptr1: *int = &value
+    local ptr2: *int = &value
+    
+    print("value = ")
+    print(to_string(value))
+    print("\n")
+    
+    print("*ptr1 = ")
+    print(to_string(*ptr1))
+    print("\n")
+    
+    print("*ptr2 = ")
+    print(to_string(*ptr2))
+    print("\n\n")
+
+    // Pointer to table
+    print("=== Table Pointers ===\n")
+    local data := {1, 2, 3, 4, 5}
+    local table_ptr: *table = &data
+    
+    print("data length = ")
+    print(to_string(#data))
+    print("\n")
+    
+    print("*table_ptr length = ")
+    print(to_string(#*table_ptr))
+    print("\n\n")
+
+    print("✓ Pointer operations working!\n")
+}
+
+main()
+

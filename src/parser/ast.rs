@@ -13,6 +13,12 @@ pub struct Ast {
 /// Statement node
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
+    /// Import statement: import "path"
+    Import {
+        path: String,
+        location: SourceLocation,
+    },
+
     /// Variable declaration: local x: int = 42
     VarDecl {
         name: String,
@@ -199,7 +205,9 @@ pub enum BinaryOp {
 pub enum UnaryOp {
     Negate,
     Not,
-    Length, // # operator
+    Length,     // # operator
+    AddressOf,  // & operator (get pointer to value)
+    Dereference, // * operator (get value from pointer)
 }
 
 /// Logical operators
@@ -232,5 +240,6 @@ pub enum Type {
         params: Vec<Type>,
         return_type: Box<Type>,
     },
+    Pointer(Box<Type>),
 }
 

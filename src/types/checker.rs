@@ -49,6 +49,7 @@ impl TypeEnvironment {
 pub struct TypeChecker {
     env: TypeEnvironment,
     current_function_return_type: Option<Type>,
+    loaded_modules: HashMap<String, bool>,
 }
 
 impl TypeChecker {
@@ -83,10 +84,310 @@ impl TypeChecker {
             },
         );
 
+        // read_file(path: string) -> string
+        env.define(
+            "read_file".to_string(),
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::String),
+            },
+        );
+
+        // write_file(path: string, content: string) -> nil
+        env.define(
+            "write_file".to_string(),
+            Type::Function {
+                params: vec![Type::String, Type::String],
+                return_type: Box::new(Type::Nil),
+            },
+        );
+
+        // string_split(text: string, delimiter: string) -> table
+        env.define(
+            "string_split".to_string(),
+            Type::Function {
+                params: vec![Type::String, Type::String],
+                return_type: Box::new(Type::Table),
+            },
+        );
+
+        // string_contains(text: string, pattern: string) -> bool
+        env.define(
+            "string_contains".to_string(),
+            Type::Function {
+                params: vec![Type::String, Type::String],
+                return_type: Box::new(Type::Bool),
+            },
+        );
+
+        // string_starts_with(text: string, prefix: string) -> bool
+        env.define(
+            "string_starts_with".to_string(),
+            Type::Function {
+                params: vec![Type::String, Type::String],
+                return_type: Box::new(Type::Bool),
+            },
+        );
+
+        // string_trim(text: string) -> string
+        env.define(
+            "string_trim".to_string(),
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::String),
+            },
+        );
+
+        // string_length(text: string) -> int
+        env.define(
+            "string_length".to_string(),
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::Int),
+            },
+        );
+
+        // table_length(table: table) -> int
+        env.define(
+            "table_length".to_string(),
+            Type::Function {
+                params: vec![Type::Table],
+                return_type: Box::new(Type::Int),
+            },
+        );
+
+        // table_push(table: table, value: any) -> table
+        env.define(
+            "table_push".to_string(),
+            Type::Function {
+                params: vec![Type::Table, Type::Nil], // Nil as placeholder for any type
+                return_type: Box::new(Type::Table),
+            },
+        );
+
+        // parse_lux(source: string) -> table
+        env.define(
+            "parse_lux".to_string(),
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::Table),
+            },
+        );
+
+        // type_of(value: any) -> string
+        env.define(
+            "type_of".to_string(),
+            Type::Function {
+                params: vec![Type::Nil], // any type
+                return_type: Box::new(Type::String),
+            },
+        );
+
+        // to_string(value: any) -> string
+        env.define(
+            "to_string".to_string(),
+            Type::Function {
+                params: vec![Type::Nil], // any type
+                return_type: Box::new(Type::String),
+            },
+        );
+
+        // to_int(value: any) -> int
+        env.define(
+            "to_int".to_string(),
+            Type::Function {
+                params: vec![Type::Nil], // any type
+                return_type: Box::new(Type::Int),
+            },
+        );
+
+        // to_float(value: any) -> float
+        env.define(
+            "to_float".to_string(),
+            Type::Function {
+                params: vec![Type::Nil], // any type
+                return_type: Box::new(Type::Float),
+            },
+        );
+
+        // substring(text: string, start: int, length: int) -> string
+        env.define(
+            "substring".to_string(),
+            Type::Function {
+                params: vec![Type::String, Type::Int, Type::Int],
+                return_type: Box::new(Type::String),
+            },
+        );
+
+        // string_replace(text: string, from: string, to: string) -> string
+        env.define(
+            "string_replace".to_string(),
+            Type::Function {
+                params: vec![Type::String, Type::String, Type::String],
+                return_type: Box::new(Type::String),
+            },
+        );
+
+        // string_upper(text: string) -> string
+        env.define(
+            "string_upper".to_string(),
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::String),
+            },
+        );
+
+        // string_lower(text: string) -> string
+        env.define(
+            "string_lower".to_string(),
+            Type::Function {
+                params: vec![Type::String],
+                return_type: Box::new(Type::String),
+            },
+        );
+
+        // string_ends_with(text: string, suffix: string) -> bool
+        env.define(
+            "string_ends_with".to_string(),
+            Type::Function {
+                params: vec![Type::String, Type::String],
+                return_type: Box::new(Type::Bool),
+            },
+        );
+
+        // sqrt(x: float) -> float
+        env.define(
+            "sqrt".to_string(),
+            Type::Function {
+                params: vec![Type::Float],
+                return_type: Box::new(Type::Float),
+            },
+        );
+
+        // pow(base: float, exp: float) -> float
+        env.define(
+            "pow".to_string(),
+            Type::Function {
+                params: vec![Type::Float, Type::Float],
+                return_type: Box::new(Type::Float),
+            },
+        );
+
+        // abs(x: number) -> number
+        env.define(
+            "abs".to_string(),
+            Type::Function {
+                params: vec![Type::Nil], // int or float
+                return_type: Box::new(Type::Nil),
+            },
+        );
+
+        // floor(x: float) -> int
+        env.define(
+            "floor".to_string(),
+            Type::Function {
+                params: vec![Type::Float],
+                return_type: Box::new(Type::Int),
+            },
+        );
+
+        // ceil(x: float) -> int
+        env.define(
+            "ceil".to_string(),
+            Type::Function {
+                params: vec![Type::Float],
+                return_type: Box::new(Type::Int),
+            },
+        );
+
+        // min(a: number, b: number) -> number
+        env.define(
+            "min".to_string(),
+            Type::Function {
+                params: vec![Type::Nil, Type::Nil], // any numbers
+                return_type: Box::new(Type::Nil),
+            },
+        );
+
+        // max(a: number, b: number) -> number
+        env.define(
+            "max".to_string(),
+            Type::Function {
+                params: vec![Type::Nil, Type::Nil], // any numbers
+                return_type: Box::new(Type::Nil),
+            },
+        );
+
         Self {
             env,
             current_function_return_type: None,
+            loaded_modules: HashMap::new(),
         }
+    }
+
+    fn import_module(&mut self, path: &str, location: &crate::error::SourceLocation) -> LuxResult<()> {
+        // Check if already loaded
+        if self.loaded_modules.contains_key(path) {
+            return Ok(());
+        }
+
+        // Resolve the module path
+        let resolved_path = self.resolve_module_path(path, location)?;
+
+        // Read the file
+        let source = std::fs::read_to_string(&resolved_path)
+            .map_err(|e| LuxError::type_error(
+                format!("Failed to read module '{}': {}", path, e),
+                location.clone(),
+            ))?;
+
+        // Parse the module
+        use crate::lexer::Lexer;
+        use crate::parser::Parser;
+
+        let mut lexer = Lexer::new(&source, Some(&resolved_path));
+        let tokens = lexer.tokenize()?;
+        let mut parser = Parser::new(tokens);
+        let ast = parser.parse()?;
+
+        // Type-check the module in the current environment
+        for stmt in &ast.statements {
+            self.check_stmt(stmt)?;
+        }
+
+        // Mark as loaded
+        self.loaded_modules.insert(path.to_string(), true);
+
+        Ok(())
+    }
+
+    fn resolve_module_path(&self, path: &str, location: &crate::error::SourceLocation) -> LuxResult<String> {
+        use std::path::Path;
+
+        // Try different locations:
+        // 1. In lib/ directory
+        let lib_path = Path::new("lib").join(format!("{}.lux", path));
+        if lib_path.exists() {
+            return Ok(lib_path.to_string_lossy().to_string());
+        }
+
+        // 2. In tools/ directory
+        let tools_path = Path::new("tools").join(format!("{}.lux", path));
+        if tools_path.exists() {
+            return Ok(tools_path.to_string_lossy().to_string());
+        }
+
+        // 3. As absolute or relative path with .lux extension
+        let direct_path_str = format!("{}.lux", path);
+        let direct_path = Path::new(&direct_path_str);
+        if direct_path.exists() {
+            return Ok(direct_path.to_string_lossy().to_string());
+        }
+
+        Err(LuxError::type_error(
+            format!("Module '{}' not found", path),
+            location.clone(),
+        ))
     }
 
     /// Type check an entire AST
@@ -100,6 +401,12 @@ impl TypeChecker {
     /// Check a statement
     fn check_stmt(&mut self, stmt: &Stmt) -> LuxResult<()> {
         match stmt {
+            Stmt::Import { path, location } => {
+                // Load and type-check the imported module
+                self.import_module(path, location)?;
+                Ok(())
+            }
+
             Stmt::VarDecl { name, type_annotation, initializer, location, .. } => {
                 let init_type = if let Some(init) = initializer {
                     Some(self.check_expr(init)?)
@@ -405,6 +712,21 @@ impl TypeChecker {
                             ))
                         }
                     }
+                    UnaryOp::AddressOf => {
+                        // & operator creates a pointer to the operand
+                        Ok(Type::Pointer(Box::new(operand_type)))
+                    }
+                    UnaryOp::Dereference => {
+                        // * operator dereferences a pointer
+                        if let Type::Pointer(inner_type) = operand_type {
+                            Ok(*inner_type)
+                        } else {
+                            Err(LuxError::type_error(
+                                format!("Cannot dereference non-pointer type {:?}", operand_type),
+                                location.clone(),
+                            ))
+                        }
+                    }
                 }
             }
 
@@ -466,7 +788,10 @@ impl TypeChecker {
                             for (i, (arg, expected_type)) in arguments.iter().zip(params.iter()).enumerate() {
                                 let arg_type = self.check_expr(arg)?;
                                 // Allow Nil (unknown type) to match any expected type
-                                if !matches!(arg_type, Type::Nil) && !self.types_compatible(expected_type, &arg_type) {
+                                // Also allow expected_type of Nil to accept any arg_type (for variadic/any params)
+                                if !matches!(arg_type, Type::Nil)
+                                    && !matches!(expected_type, Type::Nil)
+                                    && !self.types_compatible(expected_type, &arg_type) {
                                     return Err(LuxError::type_error(
                                         format!(
                                             "Argument {} type mismatch: expected {:?}, got {:?}",
@@ -583,6 +908,10 @@ impl TypeChecker {
                 // For now, accept any function type
                 // TODO: Check parameter and return types
                 true
+            }
+            (Type::Pointer(expected_inner), Type::Pointer(actual_inner)) => {
+                // Pointers are compatible if their inner types are compatible
+                self.types_compatible(expected_inner, actual_inner)
             }
             _ => false,
         }

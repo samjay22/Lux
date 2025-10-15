@@ -35,7 +35,9 @@ impl Parser {
     // ===== Declarations =====
 
     fn declaration(&mut self) -> LuxResult<Stmt> {
-        if self.match_keyword(Keyword::Local) {
+        if self.match_keyword(Keyword::Import) {
+            self.import_declaration()
+        } else if self.match_keyword(Keyword::Local) {
             self.var_declaration(false)
         } else if self.match_keyword(Keyword::Const) {
             self.var_declaration(true)
@@ -43,6 +45,28 @@ impl Parser {
             self.function_declaration()
         } else {
             self.statement()
+        }
+    }
+
+    fn import_declaration(&mut self) -> LuxResult<Stmt> {
+        let location = self.previous().location.clone();
+
+        // Expect a string literal for the path
+        if let TokenType::Literal(TokenLiteral::String(_)) = &self.peek().token_type {
+            let token = self.advance();
+            if let TokenType::Literal(TokenLiteral::String(path)) = &token.token_type {
+                Ok(Stmt::Import {
+                    path: path.clone(),
+                    location
+                })
+            } else {
+                unreachable!()
+            }
+        } else {
+            Err(LuxError::parse_error(
+                "Expected string path after 'import'".to_string(),
+                self.peek().location.clone(),
+            ))
         }
     }
 
@@ -84,8 +108,14 @@ impl Parser {
         if !self.check(TokenType::RightParen) {
             loop {
                 let param_name = self.consume_identifier("Expected parameter name")?;
-                self.consume(TokenType::Colon, "Expected ':' after parameter name")?;
-                let param_type = self.parse_type()?;
+
+                // Type annotation is optional
+                let param_type = if self.match_token(TokenType::Colon) {
+                    self.parse_type()?
+                } else {
+                    Type::Nil // Use Nil to represent "any" type
+                };
+
                 params.push((param_name, param_type));
 
                 if !self.match_token(TokenType::Comma) {
@@ -416,11 +446,13 @@ impl Parser {
     }
 
     fn unary(&mut self) -> LuxResult<Expr> {
-        if self.match_tokens(&[TokenType::Minus, TokenType::Hash]) || self.match_keyword(Keyword::Not) {
+        if self.match_tokens(&[TokenType::Minus, TokenType::Hash, TokenType::Ampersand, TokenType::Star]) || self.match_keyword(Keyword::Not) {
             let location = self.previous().location.clone();
             let operator = match &self.previous().token_type {
                 TokenType::Minus => UnaryOp::Negate,
                 TokenType::Hash => UnaryOp::Length,
+                TokenType::Ampersand => UnaryOp::AddressOf,
+                TokenType::Star => UnaryOp::Dereference,
                 TokenType::Keyword(Keyword::Not) => UnaryOp::Not,
                 _ => unreachable!(),
             };
@@ -576,8 +608,14 @@ impl Parser {
         if !self.check(TokenType::RightParen) {
             loop {
                 let param_name = self.consume_identifier("Expected parameter name")?;
-                self.consume(TokenType::Colon, "Expected ':' after parameter name")?;
-                let param_type = self.parse_type()?;
+
+                // Type annotation is optional
+                let param_type = if self.match_token(TokenType::Colon) {
+                    self.parse_type()?
+                } else {
+                    Type::Nil // Use Nil to represent "any" type
+                };
+
                 params.push((param_name, param_type));
 
                 if !self.match_token(TokenType::Comma) {
@@ -658,6 +696,12 @@ impl Parser {
     // ===== Type Parsing =====
 
     fn parse_type(&mut self) -> LuxResult<Type> {
+        // Check for pointer type: *T
+        if self.match_token(TokenType::Star) {
+            let inner_type = self.parse_type()?;
+            return Ok(Type::Pointer(Box::new(inner_type)));
+        }
+
         if self.match_keyword(Keyword::Int) {
             Ok(Type::Int)
         } else if self.match_keyword(Keyword::Float) {

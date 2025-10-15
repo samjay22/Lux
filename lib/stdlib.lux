@@ -1,0 +1,316 @@
+// ============================================================================
+// Lux Standard Library
+// Written in Lux!
+// ============================================================================
+
+// ============================================================================
+// STRING UTILITIES
+// ============================================================================
+
+// Join array of strings with delimiter
+fn string_join(strings: table, delimiter: string) -> string {
+    local result := ""
+    local i := 1
+    local len := table_length(strings)
+    
+    while i <= len {
+        result = result + strings[i]
+        if i < len {
+            result = result + delimiter
+        }
+        i = i + 1
+    }
+    
+    return result
+}
+
+// Repeat string n times
+fn string_repeat(text: string, count: int) -> string {
+    local result := ""
+    local i := 0
+    
+    while i < count {
+        result = result + text
+        i = i + 1
+    }
+    
+    return result
+}
+
+// Pad string on left to reach target length
+fn string_pad_left(text: string, length: int, pad: string) -> string {
+    local current_len := string_length(text)
+    
+    if current_len >= length {
+        return text
+    }
+    
+    local needed := length - current_len
+    local padding := string_repeat(pad, needed)
+    
+    return padding + text
+}
+
+// Pad string on right to reach target length
+fn string_pad_right(text: string, length: int, pad: string) -> string {
+    local current_len := string_length(text)
+    
+    if current_len >= length {
+        return text
+    }
+    
+    local needed := length - current_len
+    local padding := string_repeat(pad, needed)
+    
+    return text + padding
+}
+
+// Reverse a string
+fn string_reverse(text: string) -> string {
+    local chars := string_split(text, "")
+    local result := ""
+    local i := table_length(chars)
+    
+    while i > 0 {
+        result = result + chars[i]
+        i = i - 1
+    }
+    
+    return result
+}
+
+// Check if string is empty or whitespace
+fn string_is_empty(text: string) -> bool {
+    local trimmed := string_trim(text)
+    return string_length(trimmed) == 0
+}
+
+// ============================================================================
+// TABLE/ARRAY UTILITIES
+// ============================================================================
+
+// Map: Apply function to each element
+fn table_map(arr: table, func) -> table {
+    local result := {}
+    local i := 1
+    local len := table_length(arr)
+
+    while i <= len {
+        local value := func(arr[i])
+        result = table_push(result, value)
+        i = i + 1
+    }
+
+    return result
+}
+
+// Filter: Keep elements that pass predicate
+fn table_filter(arr: table, predicate) -> table {
+    local result := {}
+    local i := 1
+    local len := table_length(arr)
+
+    while i <= len {
+        if predicate(arr[i]) {
+            result = table_push(result, arr[i])
+        }
+        i = i + 1
+    }
+
+    return result
+}
+
+// Reduce: Fold array into single value
+fn table_reduce(arr: table, func, initial: int) -> int {
+    local accumulator := initial
+    local i := 1
+    local len := table_length(arr)
+
+    while i <= len {
+        accumulator = func(accumulator, arr[i])
+        i = i + 1
+    }
+
+    return accumulator
+}
+
+// Find: Return first element that passes predicate
+fn table_find(arr: table, predicate) -> int {
+    local i := 1
+    local len := table_length(arr)
+    
+    while i <= len {
+        if predicate(arr[i]) {
+            return arr[i]
+        }
+        i = i + 1
+    }
+    
+    return nil
+}
+
+// Contains: Check if array contains value
+fn table_contains(arr: table, value: int) -> bool {
+    local i := 1
+    local len := table_length(arr)
+    
+    while i <= len {
+        if arr[i] == value {
+            return true
+        }
+        i = i + 1
+    }
+    
+    return false
+}
+
+// Reverse: Reverse array order
+fn table_reverse(arr: table) -> table {
+    local result := {}
+    local i := table_length(arr)
+    
+    while i > 0 {
+        result = table_push(result, arr[i])
+        i = i - 1
+    }
+    
+    return result
+}
+
+// Concat: Concatenate two arrays
+fn table_concat(arr1: table, arr2: table) -> table {
+    local result := {}
+    local i := 1
+    local len1 := table_length(arr1)
+    
+    // Copy first array
+    while i <= len1 {
+        result = table_push(result, arr1[i])
+        i = i + 1
+    }
+    
+    // Copy second array
+    i = 1
+    local len2 := table_length(arr2)
+    while i <= len2 {
+        result = table_push(result, arr2[i])
+        i = i + 1
+    }
+    
+    return result
+}
+
+// Slice: Extract portion of array
+fn table_slice(arr: table, start: int, end: int) -> table {
+    local result := {}
+    local i := start
+    
+    while i <= end {
+        if i > 0 {
+            if i <= table_length(arr) {
+                result = table_push(result, arr[i])
+            }
+        }
+        i = i + 1
+    }
+    
+    return result
+}
+
+// Sum: Add all numbers in array
+fn table_sum(arr: table) -> int {
+    local sum := 0
+    local i := 1
+    local len := table_length(arr)
+    
+    while i <= len {
+        sum = sum + arr[i]
+        i = i + 1
+    }
+    
+    return sum
+}
+
+// ============================================================================
+// MATH UTILITIES
+// ============================================================================
+
+// Clamp value between min and max
+fn math_clamp(value: int, min_val: int, max_val: int) -> int {
+    if value < min_val {
+        return min_val
+    }
+    if value > max_val {
+        return max_val
+    }
+    return value
+}
+
+// Linear interpolation
+fn math_lerp(a: float, b: float, t: float) -> float {
+    return a + (b - a) * t
+}
+
+// Round to nearest integer
+fn math_round(x: float) -> int {
+    local floored := floor(x)
+    local remainder := x - to_float(floored)
+    
+    if remainder >= 0.5 {
+        return floored + 1
+    }
+    
+    return floored
+}
+
+// Check if number is even
+fn math_is_even(n: int) -> bool {
+    return n % 2 == 0
+}
+
+// Check if number is odd
+fn math_is_odd(n: int) -> bool {
+    return n % 2 != 0
+}
+
+// ============================================================================
+// I/O UTILITIES
+// ============================================================================
+
+// Read file as lines
+fn io_read_lines(filename: string) -> table {
+    local content := read_file(filename)
+    return string_split(content, "\n")
+}
+
+// Write lines to file
+fn io_write_lines(filename: string, lines: table) {
+    local content := string_join(lines, "\n")
+    write_file(filename, content)
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+// Print with newline
+fn println(value: string) {
+    print(value)
+    print("\n")
+}
+
+// Print multiple values
+fn print_all(values: table) {
+    local i := 1
+    local len := table_length(values)
+    
+    while i <= len {
+        print(values[i])
+        if i < len {
+            print(" ")
+        }
+        i = i + 1
+    }
+    print("\n")
+}
+

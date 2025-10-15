@@ -1,0 +1,288 @@
+// Semantic Analyzer for Lux
+// Written in Lux itself!
+
+// Track variables in scope
+local variables := {}
+local warnings := {}
+local errors := {}
+
+// Helper: Add warning
+fn add_warning(message: string) {
+    local w := table_push(warnings, message)
+    warnings = w
+}
+
+// Helper: Add error
+fn add_error(message: string) {
+    local e := table_push(errors, message)
+    errors = e
+}
+
+// Helper: Check if variable is defined
+fn is_defined(name: string) -> bool {
+    local i := 1
+    while i <= table_length(variables) {
+        if variables[i] == name {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+// Helper: Mark variable as defined
+fn define_variable(name: string) {
+    local v := table_push(variables, name)
+    variables = v
+}
+
+// Register built-in functions
+fn register_builtins() {
+    define_variable("print")
+    define_variable("read_file")
+    define_variable("write_file")
+    define_variable("string_split")
+    define_variable("string_contains")
+    define_variable("string_starts_with")
+    define_variable("string_trim")
+    define_variable("string_length")
+    define_variable("table_length")
+    define_variable("table_push")
+    define_variable("parse_lux")
+    define_variable("setmetatable")
+    define_variable("getmetatable")
+    define_variable("spawn")
+    define_variable("await")
+}
+
+// Analyze expression
+fn analyze_expr(expr: table) {
+    local expr_type := expr.type
+    
+    if expr_type == "Variable" {
+        local var_name := expr.name
+        if is_defined(var_name) == false {
+            add_error("Undefined variable: ")
+            add_error(var_name)
+        }
+    }
+    
+    if expr_type == "Binary" {
+        analyze_expr(expr.left)
+        analyze_expr(expr.right)
+    }
+    
+    if expr_type == "Call" {
+        analyze_expr(expr.callee)
+        
+        // Analyze arguments
+        local args := expr.arguments
+        local i := 1
+        while i <= table_length(args) {
+            analyze_expr(args[i])
+            i = i + 1
+        }
+    }
+}
+
+// Analyze statement
+fn analyze_stmt(stmt: table) {
+    local stmt_type := stmt.type
+    
+    if stmt_type == "VarDecl" {
+        local var_name := stmt.name
+        
+        // Check if already defined (shadowing warning)
+        if is_defined(var_name) {
+            add_warning("Variable shadowing: ")
+            add_warning(var_name)
+        }
+        
+        // Analyze initializer
+        local init := stmt.initializer
+        if init != nil {
+            analyze_expr(init)
+        }
+        
+        // Define the variable
+        define_variable(var_name)
+    }
+    
+    if stmt_type == "FunctionDecl" {
+        local func_name := stmt.name
+
+        // Define function name
+        define_variable(func_name)
+
+        // Save current variables (for scope)
+        local saved_vars := variables
+
+        // Define parameters
+        local params_list := stmt.params
+        local p := 1
+        while p <= table_length(params_list) {
+            local param := params_list[p]
+            local param_name := param.name
+            define_variable(param_name)
+            p = p + 1
+        }
+
+        // Analyze function body
+        local body := stmt.body
+        local i := 1
+        while i <= table_length(body) {
+            analyze_stmt(body[i])
+            i = i + 1
+        }
+
+        // Restore variables (exit scope)
+        variables = saved_vars
+    }
+    
+    if stmt_type == "Expression" {
+        analyze_expr(stmt.expr)
+    }
+    
+    if stmt_type == "If" {
+        analyze_expr(stmt.condition)
+        
+        // Analyze then branch
+        local then_branch := stmt.then_branch
+        local i := 1
+        while i <= table_length(then_branch) {
+            analyze_stmt(then_branch[i])
+            i = i + 1
+        }
+        
+        // Analyze else branch if exists
+        local else_branch := stmt.else_branch
+        if else_branch != nil {
+            local j := 1
+            while j <= table_length(else_branch) {
+                analyze_stmt(else_branch[j])
+                j = j + 1
+            }
+        }
+    }
+    
+    if stmt_type == "While" {
+        analyze_expr(stmt.condition)
+        
+        // Analyze body
+        local body := stmt.body
+        local i := 1
+        while i <= table_length(body) {
+            analyze_stmt(body[i])
+            i = i + 1
+        }
+    }
+    
+    if stmt_type == "For" {
+        // Analyze initializer
+        local init := stmt.initializer
+        if init != nil {
+            analyze_stmt(init)
+        }
+        
+        // Analyze condition
+        local cond := stmt.condition
+        if cond != nil {
+            analyze_expr(cond)
+        }
+        
+        // Analyze increment
+        local inc := stmt.increment
+        if inc != nil {
+            analyze_expr(inc)
+        }
+        
+        // Analyze body
+        local body := stmt.body
+        local i := 1
+        while i <= table_length(body) {
+            analyze_stmt(body[i])
+            i = i + 1
+        }
+    }
+    
+    if stmt_type == "Return" {
+        local val := stmt.value
+        if val != nil {
+            analyze_expr(val)
+        }
+    }
+}
+
+// Main analysis function
+fn analyze_file(filename: string) {
+    print("=== Semantic Analysis ===")
+    print("File: ")
+    print(filename)
+    print("")
+
+    // Register built-in functions
+    register_builtins()
+
+    // Read file
+    local source := read_file(filename)
+
+    // Parse
+    print("Parsing...")
+    local ast := parse_lux(source)
+
+    print("Analyzing...")
+    
+    // Analyze each statement
+    local i := 1
+    while i <= table_length(ast) {
+        analyze_stmt(ast[i])
+        i = i + 1
+    }
+    
+    // Report results
+    print("")
+    print("=== Analysis Results ===")
+    print("")
+    
+    local error_count := table_length(errors)
+    local warning_count := table_length(warnings)
+    
+    if error_count > 0 {
+        print("Errors:")
+        local j := 1
+        while j <= error_count {
+            print("  - ")
+            print(errors[j])
+            j = j + 1
+        }
+        print("")
+    }
+    
+    if warning_count > 0 {
+        print("Warnings:")
+        local k := 1
+        while k <= warning_count {
+            print("  - ")
+            print(warnings[k])
+            k = k + 1
+        }
+        print("")
+    }
+    
+    if error_count == 0 {
+        if warning_count == 0 {
+            print("✓ No issues found!")
+        }
+    }
+    
+    print("")
+    print("Summary:")
+    print("  Errors: ")
+    print(error_count)
+    print("  Warnings: ")
+    print(warning_count)
+}
+
+// Run analyzer on a test file
+analyze_file("examples/test_semantic_complex.lux")
+
