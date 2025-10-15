@@ -121,9 +121,9 @@ pub enum Expr {
         location: SourceLocation,
     },
 
-    /// Assignment
+    /// Assignment (variable or table element)
     Assign {
-        target: String,
+        target: Box<Expr>,  // Can be Variable or TableAccess
         value: Box<Expr>,
         location: SourceLocation,
     },

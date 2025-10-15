@@ -50,3 +50,41 @@ TODO: Add tests for the language features
 TODO: VS Code Plugin
 
 ```
+
+Leetcode #1
+
+```
+async fn two_sum(nums: *table, target: int) -> table {
+    local cache: table = {}
+
+    local i: int = 1
+    local temp : table = *nums
+    while i <= #temp {
+        local v := temp[i]
+
+        // Check if complement exists in cache
+        local complement := target - v
+        local cached := cache[complement]
+
+        if cached {
+            return {cached, i}
+        }
+
+        // Store current value's index
+        cache[v] = i
+        i = i + 1
+    }
+
+    // No solution found
+    return {}
+}
+
+local n : table = {2, 7, 11, 15}
+local target : int = 9
+
+local f := spawn two_sum(&n, target)
+local result := await f
+
+print(result)
+
+```

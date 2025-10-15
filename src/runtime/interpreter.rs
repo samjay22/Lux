@@ -1104,13 +1104,51 @@ impl Interpreter {
 
             Expr::Assign { target, value, location } => {
                 let val = self.eval_expr(value)?;
-                if self.env.set(target, val.clone()) {
-                    Ok(val)
-                } else {
-                    Err(LuxError::runtime_error(
-                        format!("Undefined variable '{}'", target),
-                        Some(location.clone()),
-                    ))
+
+                match target.as_ref() {
+                    Expr::Variable { name, .. } => {
+                        // Simple variable assignment
+                        if self.env.set(name, val.clone()) {
+                            Ok(val)
+                        } else {
+                            Err(LuxError::runtime_error(
+                                format!("Undefined variable '{}'", name),
+                                Some(location.clone()),
+                            ))
+                        }
+                    }
+                    Expr::TableAccess { table, key, .. } => {
+                        // Table element assignment: table[key] = value
+                        let table_val = self.eval_expr(table)?;
+                        let key_val = self.eval_expr(key)?;
+
+                        match table_val {
+                            Value::Table(mut t) => {
+                                // Use the existing set method
+                                t.set(key_val, val.clone());
+
+                                // Update the table in the environment
+                                // We need to get the table variable name and update it
+                                if let Expr::Variable { name, .. } = table.as_ref() {
+                                    self.env.set(name, Value::Table(t));
+                                }
+
+                                Ok(val)
+                            }
+                            _ => {
+                                Err(LuxError::runtime_error(
+                                    format!("Cannot index non-table type: {}", table_val.type_name()),
+                                    Some(location.clone()),
+                                ))
+                            }
+                        }
+                    }
+                    _ => {
+                        Err(LuxError::runtime_error(
+                            "Invalid assignment target".to_string(),
+                            Some(location.clone()),
+                        ))
+                    }
                 }
             }
 

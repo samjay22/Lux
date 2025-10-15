@@ -298,18 +298,22 @@ impl Parser {
             let location = self.previous().location.clone();
             let value = Box::new(self.assignment()?);
 
-            if let Expr::Variable { name, .. } = expr {
-                return Ok(Expr::Assign {
-                    target: name,
-                    value,
-                    location,
-                });
+            // Check if the target is a valid assignment target
+            match &expr {
+                Expr::Variable { .. } | Expr::TableAccess { .. } => {
+                    return Ok(Expr::Assign {
+                        target: Box::new(expr),
+                        value,
+                        location,
+                    });
+                }
+                _ => {
+                    return Err(LuxError::parse_error(
+                        "Invalid assignment target",
+                        location,
+                    ));
+                }
             }
-
-            return Err(LuxError::parse_error(
-                "Invalid assignment target",
-                location,
-            ));
         }
 
         Ok(expr)

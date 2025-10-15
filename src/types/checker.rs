@@ -739,28 +739,54 @@ impl TypeChecker {
             }
 
             Expr::Assign { target, value, location } => {
-                let name = target;
-                let var_type = self.env.get(name).ok_or_else(|| {
-                    LuxError::type_error(
-                        format!("Undefined variable '{}'", name),
-                        location.clone(),
-                    )
-                })?;
-
                 let value_type = self.check_expr(value)?;
 
-                // Allow Nil (unknown type) to be assigned to any variable
-                if !matches!(value_type, Type::Nil) && !self.types_compatible(&var_type, &value_type) {
-                    return Err(LuxError::type_error(
-                        format!(
-                            "Type mismatch: cannot assign {:?} to variable of type {:?}",
-                            value_type, var_type
-                        ),
-                        location.clone(),
-                    ));
-                }
+                match target.as_ref() {
+                    Expr::Variable { name, .. } => {
+                        // Simple variable assignment
+                        let var_type = self.env.get(name).ok_or_else(|| {
+                            LuxError::type_error(
+                                format!("Undefined variable '{}'", name),
+                                location.clone(),
+                            )
+                        })?;
 
-                Ok(value_type)
+                        // Allow Nil (unknown type) to be assigned to any variable
+                        if !matches!(value_type, Type::Nil) && !self.types_compatible(&var_type, &value_type) {
+                            return Err(LuxError::type_error(
+                                format!(
+                                    "Type mismatch: cannot assign {:?} to variable of type {:?}",
+                                    value_type, var_type
+                                ),
+                                location.clone(),
+                            ));
+                        }
+
+                        Ok(value_type)
+                    }
+                    Expr::TableAccess { table, .. } => {
+                        // Table element assignment: table[key] = value
+                        // Check that the table expression is valid
+                        let table_type = self.check_expr(table)?;
+
+                        // For now, just verify it's a table type
+                        if !matches!(table_type, Type::Table | Type::Nil) {
+                            return Err(LuxError::type_error(
+                                format!("Cannot index non-table type {:?}", table_type),
+                                location.clone(),
+                            ));
+                        }
+
+                        // Table assignments are dynamically typed, so we accept any value
+                        Ok(value_type)
+                    }
+                    _ => {
+                        Err(LuxError::type_error(
+                            "Invalid assignment target".to_string(),
+                            location.clone(),
+                        ))
+                    }
+                }
             }
 
             Expr::Call { callee, arguments, location } => {
