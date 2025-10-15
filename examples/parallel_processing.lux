@@ -1,0 +1,230 @@
+// Parallel Processing Example
+// Demonstrates awaiting multiple tasks simultaneously
+
+print("=== Parallel Processing Demo ===")
+print("")
+
+// Example 1: Parallel Data Processing
+print("1. Parallel Data Processing")
+print("----------------------------")
+
+fn processData(id: int, value: int) -> int {
+    print("Processing data ")
+    print(id)
+    print(" with value ")
+    print(value)
+    return value * value
+}
+
+// Spawn multiple data processing tasks
+local task1 := spawn processData(1, 5)
+local task2 := spawn processData(2, 10)
+local task3 := spawn processData(3, 15)
+local task4 := spawn processData(4, 20)
+
+// Await all tasks at once
+local tasks := {task1, task2, task3, task4}
+print("")
+print("Awaiting all tasks...")
+local results := await tasks
+
+print("")
+print("Results:")
+print("Task 1: ")
+print(results[1])
+print("Task 2: ")
+print(results[2])
+print("Task 3: ")
+print(results[3])
+print("Task 4: ")
+print(results[4])
+
+print("")
+
+// Example 2: Named Task Groups
+print("2. Named Task Groups")
+print("--------------------")
+
+fn fetchUserData() -> int {
+    print("Fetching user data...")
+    return 42
+}
+
+fn fetchSettings() -> int {
+    print("Fetching settings...")
+    return 100
+}
+
+fn fetchNotifications() -> int {
+    print("Fetching notifications...")
+    return 5
+}
+
+// Spawn named tasks
+local userTask := spawn fetchUserData()
+local settingsTask := spawn fetchSettings()
+local notificationsTask := spawn fetchNotifications()
+
+// Group tasks with meaningful names
+local apiTasks := {
+    user = userTask,
+    settings = settingsTask,
+    notifications = notificationsTask
+}
+
+print("")
+print("Awaiting API calls...")
+local apiResults := await apiTasks
+
+print("")
+print("API Results:")
+print("User ID: ")
+print(apiResults.user)
+print("Settings count: ")
+print(apiResults.settings)
+print("Notifications: ")
+print(apiResults.notifications)
+
+print("")
+
+// Example 3: Parallel Computation with Aggregation
+print("3. Parallel Computation with Aggregation")
+print("-----------------------------------------")
+
+fn computeSquare(n: int) -> int {
+    return n * n
+}
+
+fn computeCube(n: int) -> int {
+    return n * n * n
+}
+
+fn computeDouble(n: int) -> int {
+    return n * 2
+}
+
+// Spawn computations
+local sq := spawn computeSquare(5)
+local cb := spawn computeCube(5)
+local db := spawn computeDouble(5)
+
+local computeTasks := {sq, cb, db}
+local computeResults := await computeTasks
+
+print("Computing square, cube, and double of 5...")
+print("")
+print("Square: ")
+print(computeResults[1])
+print("Cube: ")
+print(computeResults[2])
+print("Double: ")
+print(computeResults[3])
+
+// Aggregate results
+local total := computeResults[1] + computeResults[2] + computeResults[3]
+print("Total: ")
+print(total)
+
+print("")
+
+// Example 4: Batch Processing
+print("4. Batch Processing")
+print("-------------------")
+
+fn batchProcess(batchId: int) -> int {
+    print("Processing batch ")
+    print(batchId)
+    return batchId * 10
+}
+
+// Process multiple batches in parallel
+local batch1 := spawn batchProcess(1)
+local batch2 := spawn batchProcess(2)
+local batch3 := spawn batchProcess(3)
+local batch4 := spawn batchProcess(4)
+local batch5 := spawn batchProcess(5)
+
+local batches := {batch1, batch2, batch3, batch4, batch5}
+
+print("")
+print("Awaiting all batches...")
+local batchResults := await batches
+
+print("")
+print("Batch Results:")
+local i := 1
+while i <= 5 {
+    print("Batch ")
+    print(i)
+    print(": ")
+    print(batchResults[i])
+    i = i + 1
+}
+
+// Calculate total
+local batchTotal := 0
+i = 1
+while i <= 5 {
+    batchTotal = batchTotal + batchResults[i]
+    i = i + 1
+}
+
+print("Total from all batches: ")
+print(batchTotal)
+
+print("")
+
+// Example 5: Mixed Array and Named Fields
+print("5. Mixed Array and Named Fields")
+print("--------------------------------")
+
+fn quickTask() -> int {
+    print("Quick task running...")
+    return 1
+}
+
+fn slowTask() -> int {
+    print("Slow task running...")
+    return 100
+}
+
+fn mediumTask() -> int {
+    print("Medium task running...")
+    return 50
+}
+
+local qt := spawn quickTask()
+local st := spawn slowTask()
+local mt := spawn mediumTask()
+
+// Mix of array elements and named fields
+local mixedTasks := {
+    qt,
+    st,
+    mt,
+    primary = qt,
+    secondary = st
+}
+
+print("")
+print("Awaiting mixed tasks...")
+local mixedResults := await mixedTasks
+
+print("")
+print("Mixed Results:")
+print("Array[1]: ")
+print(mixedResults[1])
+print("Array[2]: ")
+print(mixedResults[2])
+print("Array[3]: ")
+print(mixedResults[3])
+print("Primary: ")
+print(mixedResults.primary)
+print("Secondary: ")
+print(mixedResults.secondary)
+
+print("")
+print("=== Demo Complete! ===")
+print("")
+print("Parallel processing with multiple await works perfectly! ✓")
+

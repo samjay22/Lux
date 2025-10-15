@@ -1,0 +1,190 @@
+// Type Checking Demonstration
+// This file shows how static type checking works in Lux
+
+print("=== Type Checking Demo ===")
+print("")
+
+// 1. Type annotations and inference
+print("1. Type Annotations and Inference")
+print("----------------------------------")
+
+local x: int = 42
+local y := 100  // Type inferred as int
+local name: string = "Alice"
+local pi: float = 3.14159
+
+print("x (int) = ")
+print(x)
+print("y (inferred int) = ")
+print(y)
+print("name (string) = ")
+print(name)
+print("pi (float) = ")
+print(pi)
+
+print("")
+
+// 2. Function type checking
+print("2. Function Type Checking")
+print("-------------------------")
+
+fn add(a: int, b: int) -> int {
+    return a + b
+}
+
+fn greet(name: string) -> string {
+    return "Hello, " + name
+}
+
+local sum := add(10, 20)
+local greeting := greet("Bob")
+
+print("add(10, 20) = ")
+print(sum)
+print("greet('Bob') = ")
+print(greeting)
+
+print("")
+
+// 3. Type-safe operations
+print("3. Type-Safe Operations")
+print("-----------------------")
+
+local a: int = 10
+local b: int = 5
+
+print("a + b = ")
+print(a + b)
+print("a - b = ")
+print(a - b)
+print("a * b = ")
+print(a * b)
+print("a / b = ")
+print(a / b)
+
+print("")
+
+// 4. String concatenation
+print("4. String Concatenation")
+print("-----------------------")
+
+local first: string = "Hello"
+local second: string = " World"
+local combined := first + second
+
+print("first + second = ")
+print(combined)
+
+print("")
+
+// 5. Comparison operations
+print("5. Comparison Operations")
+print("------------------------")
+
+local num1: int = 10
+local num2: int = 20
+
+print("num1 < num2: ")
+print(num1 < num2)
+print("num1 == num2: ")
+print(num1 == num2)
+print("num1 != num2: ")
+print(num1 != num2)
+
+print("")
+
+// 6. Function return type checking
+print("6. Function Return Type Checking")
+print("--------------------------------")
+
+fn getNumber() -> int {
+    return 42
+}
+
+fn getMessage() -> string {
+    return "Type checking works!"
+}
+
+local number := getNumber()
+local message := getMessage()
+
+print("getNumber() = ")
+print(number)
+print("getMessage() = ")
+print(message)
+
+print("")
+
+// 7. Recursive functions with type checking
+print("7. Recursive Functions")
+print("----------------------")
+
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+print("factorial(5) = ")
+print(factorial(5))
+
+print("")
+
+// 8. Type inference with expressions
+print("8. Type Inference")
+print("-----------------")
+
+local result1 := 10 + 20  // Inferred as int
+local result2 := 3.14 * 2.0  // Inferred as float
+local result3 := "Hello" + " " + "World"  // Inferred as string
+
+print("result1 (int) = ")
+print(result1)
+print("result2 (float) = ")
+print(result2)
+print("result3 (string) = ")
+print(result3)
+
+print("")
+
+// 9. Tables with type checking
+print("9. Tables")
+print("---------")
+
+local person: table = {
+    name = "Alice",
+    age = 30
+}
+
+print("person.name = ")
+print(person.name)
+print("person.age = ")
+print(person.age)
+
+print("")
+
+// 10. Function expressions with types
+print("10. Function Expressions")
+print("------------------------")
+
+local operations: table = {
+    add = fn(a: int, b: int) -> int {
+        return a + b
+    },
+    multiply = fn(a: int, b: int) -> int {
+        return a * b
+    }
+}
+
+print("operations.add(5, 3) = ")
+print(operations.add(5, 3))
+print("operations.multiply(5, 3) = ")
+print(operations.multiply(5, 3))
+
+print("")
+
+print("=== All type checks passed! ===")
+print("")
+print("Lux has static type checking! ✓")
+

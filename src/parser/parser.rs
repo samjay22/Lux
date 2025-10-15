@@ -551,6 +551,18 @@ impl Parser {
             return self.function_expression(location);
         }
 
+        // Spawn expression
+        if self.match_keyword(Keyword::Spawn) {
+            let call = Box::new(self.unary()?);
+            return Ok(Expr::Spawn { call, location });
+        }
+
+        // Await expression
+        if self.match_keyword(Keyword::Await) {
+            let task = Box::new(self.unary()?);
+            return Ok(Expr::Await { task, location });
+        }
+
         Err(LuxError::parse_error(
             "Expected expression",
             self.peek().location.clone(),
@@ -769,7 +781,9 @@ impl Expr {
             | Expr::Table { location, .. }
             | Expr::TableAccess { location, .. }
             | Expr::Logical { location, .. }
-            | Expr::Function { location, .. } => location,
+            | Expr::Function { location, .. }
+            | Expr::Spawn { location, .. }
+            | Expr::Await { location, .. } => location,
         }
     }
 }

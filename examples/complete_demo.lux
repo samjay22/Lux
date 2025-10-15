@@ -1,0 +1,266 @@
+// Complete Lux Language Demonstration
+// Shows all major features: variables, functions, tables, async/await
+
+print("=== Lux Language Complete Demo ===")
+print("")
+
+// 1. Variables and Type Inference
+print("1. Variables and Type Inference")
+print("--------------------------------")
+local x: int = 42
+local name: string = "Lux"
+local pi: float = 3.14159
+local isReady: bool = true
+local y := 100  // Type inference
+
+print("x = ")
+print(x)
+print("name = ")
+print(name)
+print("pi = ")
+print(pi)
+print("isReady = ")
+print(isReady)
+print("y = ")
+print(y)
+
+print("")
+
+// 2. Functions and Recursion
+print("2. Functions and Recursion")
+print("--------------------------")
+
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+fn fibonacci(n: int) -> int {
+    if n < 2 {
+        return n
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+print("factorial(5) = ")
+print(factorial(5))
+print("fibonacci(8) = ")
+print(fibonacci(8))
+
+print("")
+
+// 3. Tables (Lua-style)
+print("3. Tables")
+print("---------")
+
+local person: table = {
+    name = "Alice",
+    age = 30,
+    city = "Wonderland"
+}
+
+local numbers: table = {1, 2, 3, 4, 5}
+
+print("person.name = ")
+print(person.name)
+print("person.age = ")
+print(person.age)
+print("numbers length = ")
+print(#numbers)
+
+print("")
+
+// 4. Function Expressions (Anonymous Functions)
+print("4. Function Expressions")
+print("-----------------------")
+
+local operations: table = {
+    add = fn(a: int, b: int) -> int {
+        return a + b
+    },
+    multiply = fn(a: int, b: int) -> int {
+        return a * b
+    },
+    power = fn(base: int, exp: int) -> int {
+        local result := 1
+        local i := 0
+        while i < exp {
+            result = result * base
+            i = i + 1
+        }
+        return result
+    }
+}
+
+print("operations.add(10, 5) = ")
+print(operations.add(10, 5))
+print("operations.multiply(10, 5) = ")
+print(operations.multiply(10, 5))
+print("operations.power(2, 8) = ")
+print(operations.power(2, 8))
+
+print("")
+
+// 5. Control Flow
+print("5. Control Flow")
+print("---------------")
+
+fn checkNumber(n: int) -> string {
+    if n > 0 {
+        return "positive"
+    } else if n < 0 {
+        return "negative"
+    } else {
+        return "zero"
+    }
+}
+
+print("checkNumber(42) = ")
+print(checkNumber(42))
+print("checkNumber(-10) = ")
+print(checkNumber(-10))
+print("checkNumber(0) = ")
+print(checkNumber(0))
+
+print("")
+
+// 6. Loops
+print("6. Loops")
+print("--------")
+
+print("While loop (1 to 5):")
+local i := 1
+while i <= 5 {
+    print(i)
+    i = i + 1
+}
+
+print("")
+
+// 7. Metatables
+print("7. Metatables")
+print("-------------")
+
+local vec1: table = {x = 10, y = 20}
+local vec2: table = {x = 5, y = 15}
+
+local vectorMeta: table = {
+    __add = fn(a: table, b: table) -> table {
+        return {x = a.x + b.x, y = a.y + b.y}
+    }
+}
+
+setmetatable(vec1, vectorMeta)
+setmetatable(vec2, vectorMeta)
+
+print("vec1 = {x=10, y=20}")
+print("vec2 = {x=5, y=15}")
+print("Metatables set!")
+
+print("")
+
+// 8. Async/Await (Goroutine-style)
+print("8. Async/Await")
+print("--------------")
+
+fn asyncWorker(id: int, value: int) -> int {
+    print("Worker ")
+    print(id)
+    print(" processing value ")
+    print(value)
+    return value * value
+}
+
+fn computeSum(a: int, b: int) -> int {
+    return a + b
+}
+
+print("Spawning async tasks...")
+local task1 := spawn asyncWorker(1, 5)
+local task2 := spawn asyncWorker(2, 10)
+local task3 := spawn asyncWorker(3, 15)
+
+print("Awaiting results...")
+local result1 := await task1
+local result2 := await task2
+local result3 := await task3
+
+print("Results: ")
+print(result1)
+print(", ")
+print(result2)
+print(", ")
+print(result3)
+
+local sumTask := spawn computeSum(result1, result2)
+local totalSum := await sumTask
+
+print("Sum of first two: ")
+print(totalSum)
+
+print("")
+
+// 9. Nested Functions and Closures
+print("9. Higher-Order Functions")
+print("-------------------------")
+
+fn makeMultiplier(factor: int) -> int {
+    // Note: True closures not yet implemented
+    // This demonstrates function composition
+    return factor
+}
+
+fn applyTwice(value: int, factor: int) -> int {
+    return value * factor * factor
+}
+
+local result := applyTwice(5, 3)
+print("applyTwice(5, 3) = ")
+print(result)
+
+print("")
+
+// 10. Complex Example: Parallel Fibonacci
+print("10. Parallel Fibonacci Computation")
+print("-----------------------------------")
+
+fn fibTask(n: int) -> int {
+    if n < 2 {
+        return n
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+print("Computing fib(10), fib(12), fib(14) in parallel...")
+local f1 := spawn fibTask(10)
+local f2 := spawn fibTask(12)
+local f3 := spawn fibTask(14)
+
+local fib10 := await f1
+local fib12 := await f2
+local fib14 := await f3
+
+print("fib(10) = ")
+print(fib10)
+print("fib(12) = ")
+print(fib12)
+print("fib(14) = ")
+print(fib14)
+
+print("")
+print("=== Demo Complete! ===")
+print("")
+print("Features Demonstrated:")
+print("✓ Variables with type annotations and inference")
+print("✓ Functions with recursion")
+print("✓ Tables (Lua-style)")
+print("✓ Function expressions (anonymous functions)")
+print("✓ Control flow (if/else, while)")
+print("✓ Metatables")
+print("✓ Async/await with spawn")
+print("✓ Parallel task execution")
+print("")
+print("Lux is a fully functional programming language! 🚀")
+

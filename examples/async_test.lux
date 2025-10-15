@@ -1,0 +1,59 @@
+// Test async runtime with spawn and await
+
+// Define an async function
+async fn compute(n: int) -> int {
+    print("Computing...")
+    local result := n * 2
+    print("Done computing")
+    return result
+}
+
+// Define a regular function to spawn
+fn task1() -> int {
+    print("Task 1 starting")
+    local x := 10
+    local y := 20
+    print("Task 1 computing")
+    return x + y
+}
+
+fn task2() -> int {
+    print("Task 2 starting")
+    local a := 5
+    local b := 15
+    print("Task 2 computing")
+    local c := 1
+    while c < 10000000 {
+        c = c + 1
+    }
+    return a * b
+}
+
+print("=== Async Runtime Test ===")
+print("")
+
+// Spawn tasks
+print("Spawning task 1...")
+local t1 := spawn task1()
+
+print("Spawning task 2...")
+local t2 := spawn task2()
+
+local t3 := spawn task2()
+local t4 := spawn task2()
+local t5 := spawn task2()
+
+// Await results
+local result1 := await {t2, t3, t4, t1, t5}
+local result2 := await {t1}
+
+print("")
+print("Results:")
+print("Task 1 result: ")
+print(result1)
+print("Task 2 result: ")
+print(result2)
+
+print("")
+print("=== Async Test Complete! ===")
+

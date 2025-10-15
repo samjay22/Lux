@@ -1,0 +1,83 @@
+// True Parallel Execution Demo
+// This demonstrates that tasks run in REAL parallel threads
+
+print("=== True Parallel Execution Demo ===")
+print("")
+
+// Worker function that does some computation
+fn worker(id: int, iterations: int) -> int {
+    print("Worker ")
+    print(id)
+    print(" starting...")
+    
+    local count := 0
+    local i := 0
+    while i < iterations {
+        count = count + 1
+        i = i + 1
+    }
+    
+    print("Worker ")
+    print(id)
+    print(" finished!")
+    
+    return id * 100
+}
+
+print("Test 1: Sequential Execution (for comparison)")
+print("----------------------------------------------")
+print("Running 3 workers sequentially...")
+print("")
+
+local start1 := 1
+local r1 := worker(1, 5000000)
+local r2 := worker(2, 5000000)
+local r3 := worker(3, 5000000)
+
+print("")
+print("Sequential results: ")
+print(r1)
+print(", ")
+print(r2)
+print(", ")
+print(r3)
+
+print("")
+print("")
+
+print("Test 2: Parallel Execution")
+print("---------------------------")
+print("Spawning 3 workers in parallel...")
+print("")
+
+local t1 := spawn worker(4, 5000000)
+local t2 := spawn worker(5, 5000000)
+local t3 := spawn worker(6, 5000000)
+
+print("All tasks spawned! Now awaiting...")
+print("")
+
+local tasks := {t1, t2, t3}
+local results := await tasks
+
+print("")
+print("Parallel results: ")
+print(results[1])
+print(", ")
+print(results[2])
+print(", ")
+print(results[3])
+
+print("")
+print("")
+
+print("Notice the difference:")
+print("- Sequential: Workers run one after another")
+print("- Parallel: Workers run at the same time!")
+print("")
+print("In parallel mode, you'll see multiple 'starting' messages")
+print("before any 'finished' messages, proving true parallelism!")
+
+print("")
+print("=== Demo Complete! ===")
+

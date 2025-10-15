@@ -55,8 +55,9 @@ pub fn run(source: &str, filename: Option<&str>) -> LuxResult<()> {
     // Phase 2: Parsing
     let ast = Parser::new(tokens).parse()?;
 
-    // Phase 3: Type Checking (to be implemented)
-    // let typed_ast = TypeChecker::check(ast)?;
+    // Phase 3: Type Checking
+    let mut type_checker = types::TypeChecker::new();
+    type_checker.check(&ast)?;
 
     // Phase 4: Semantic Analysis (to be implemented)
     // let validated_ast = SemanticAnalyzer::analyze(typed_ast)?;

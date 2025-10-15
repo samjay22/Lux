@@ -3,8 +3,10 @@
 //! This module implements the tree-walking interpreter for Lux.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use crate::error::{LuxError, LuxResult, SourceLocation};
 use crate::parser::ast::{Ast, Stmt, Expr, BinaryOp, UnaryOp, LogicalOp, Literal, TableKey};
+use crate::async_runtime::{AsyncExecutor, TaskState};
 use super::value::{Value, TableValue, FunctionValue, NativeFunctionValue};
 
 /// Environment for variable storage
@@ -69,6 +71,7 @@ enum ControlFlow {
 pub struct Interpreter {
     env: Environment,
     control_flow: ControlFlow,
+    executor: Arc<AsyncExecutor>,
 }
 
 impl Interpreter {
@@ -76,6 +79,7 @@ impl Interpreter {
         let mut interpreter = Self {
             env: Environment::new(),
             control_flow: ControlFlow::None,
+            executor: Arc::new(AsyncExecutor::new()),
         };
         interpreter.register_builtins();
         interpreter
@@ -143,6 +147,44 @@ impl Interpreter {
             }
         }
         Ok(())
+    }
+
+    /// Execute a task (function with arguments)
+    fn execute_task(&mut self, task_id: usize, func: FunctionValue, args: Vec<Value>) -> LuxResult<Value> {
+        // Push a new scope for the function
+        self.env.push_scope();
+
+        // Bind parameters
+        for (param, arg) in func.params.iter().zip(args.iter()) {
+            self.env.define(param.clone(), arg.clone());
+        }
+
+        // Execute the function body
+        for stmt in &func.body {
+            if let Err(e) = self.execute_stmt(stmt) {
+                self.executor.update_task_state(task_id, TaskState::Failed(e.to_string()));
+                self.env.pop_scope();
+                return Err(e);
+            }
+
+            // Check for early return
+            if matches!(self.control_flow, ControlFlow::Return(_)) {
+                break;
+            }
+        }
+
+        let return_value = match &self.control_flow {
+            ControlFlow::Return(v) => v.clone(),
+            _ => Value::Nil,
+        };
+
+        // Reset control flow
+        self.control_flow = ControlFlow::None;
+
+        self.executor.update_task_state(task_id, TaskState::Completed(return_value.clone()));
+        self.env.pop_scope();
+
+        Ok(return_value)
     }
 
     fn execute_stmt(&mut self, stmt: &Stmt) -> LuxResult<()> {
@@ -417,6 +459,235 @@ impl Interpreter {
                     is_async: false,
                 };
                 Ok(Value::Function(func))
+            }
+
+            Expr::Spawn { call, location } => {
+                // Spawn expects a function call expression
+                match call.as_ref() {
+                    Expr::Call { callee, arguments, .. } => {
+                        // Evaluate the callee to get the function
+                        let func_value = self.eval_expr(callee)?;
+
+                        match func_value {
+                            Value::Function(func) => {
+                                // Evaluate arguments
+                                let mut args = Vec::new();
+                                for arg in arguments {
+                                    args.push(self.eval_expr(arg)?);
+                                }
+
+                                // Spawn the task (don't execute yet - will execute in parallel when awaited)
+                                let task_id = self.executor.spawn_function(func, args);
+
+                                // Return the task ID
+                                Ok(Value::Int(task_id as i64))
+                            }
+                            _ => Err(LuxError::runtime_error(
+                                "spawn expects a function call",
+                                Some(location.clone()),
+                            )),
+                        }
+                    }
+                    _ => Err(LuxError::runtime_error(
+                        "spawn expects a function call expression",
+                        Some(location.clone()),
+                    )),
+                }
+            }
+
+            Expr::Await { task, location } => {
+                // Await expects a task ID (integer) or a table of task IDs
+                let task_value = self.eval_expr(task)?;
+
+                match task_value {
+                    Value::Int(task_id) => {
+                        // Single task await - execute the task if not already done
+                        if let Some(task) = self.executor.get_task(task_id as usize) {
+                            match task.state {
+                                TaskState::Completed(value) => Ok(value),
+                                TaskState::Failed(msg) => Err(LuxError::runtime_error(
+                                    &format!("Task {} failed: {}", task_id, msg),
+                                    Some(location.clone()),
+                                )),
+                                TaskState::Pending => {
+                                    // Execute the task now
+                                    if let Some(func) = task.function {
+                                        let result = self.execute_task(task_id as usize, func, task.arguments)?;
+                                        Ok(result)
+                                    } else {
+                                        Err(LuxError::runtime_error(
+                                            &format!("Task {} has no function to execute", task_id),
+                                            Some(location.clone()),
+                                        ))
+                                    }
+                                }
+                                _ => Err(LuxError::runtime_error(
+                                    &format!("Task {} is in invalid state", task_id),
+                                    Some(location.clone()),
+                                )),
+                            }
+                        } else {
+                            Err(LuxError::runtime_error(
+                                &format!("Task {} not found", task_id),
+                                Some(location.clone()),
+                            ))
+                        }
+                    }
+                    Value::Table(table) => {
+                        // Multiple tasks await - execute all tasks in parallel using threads
+                        use std::thread;
+
+                        let mut handles = Vec::new();
+                        let mut task_ids_array = Vec::new();
+                        let mut task_ids_fields = HashMap::new();
+
+                        // Collect array task IDs and spawn threads
+                        for value in table.array.iter() {
+                            match value {
+                                Value::Int(task_id) => {
+                                    let tid = *task_id as usize;
+                                    task_ids_array.push(tid);
+
+                                    if let Some(task) = self.executor.get_task(tid) {
+                                        if matches!(task.state, TaskState::Pending) {
+                                            if let Some(func) = task.function {
+                                                let args = task.arguments.clone();
+                                                let env = self.env.clone();
+                                                let executor = self.executor.clone();
+
+                                                let handle = thread::spawn(move || {
+                                                    let mut task_interp = Interpreter {
+                                                        env,
+                                                        control_flow: ControlFlow::None,
+                                                        executor: executor.clone(),
+                                                    };
+                                                    task_interp.execute_task(tid, func, args)
+                                                });
+                                                handles.push((tid, handle));
+                                            }
+                                        }
+                                    } else {
+                                        return Err(LuxError::runtime_error(
+                                            &format!("Task {} not found", task_id),
+                                            Some(location.clone()),
+                                        ));
+                                    }
+                                }
+                                _ => {
+                                    return Err(LuxError::runtime_error(
+                                        "await table must contain only task IDs (integers)",
+                                        Some(location.clone()),
+                                    ));
+                                }
+                            }
+                        }
+
+                        // Collect field task IDs and spawn threads
+                        for (key, value) in table.fields.iter() {
+                            match value {
+                                Value::Int(task_id) => {
+                                    let tid = *task_id as usize;
+                                    task_ids_fields.insert(key.clone(), tid);
+
+                                    if let Some(task) = self.executor.get_task(tid) {
+                                        if matches!(task.state, TaskState::Pending) {
+                                            if let Some(func) = task.function {
+                                                let args = task.arguments.clone();
+                                                let env = self.env.clone();
+                                                let executor = self.executor.clone();
+
+                                                let handle = thread::spawn(move || {
+                                                    let mut task_interp = Interpreter {
+                                                        env,
+                                                        control_flow: ControlFlow::None,
+                                                        executor: executor.clone(),
+                                                    };
+                                                    task_interp.execute_task(tid, func, args)
+                                                });
+                                                handles.push((tid, handle));
+                                            }
+                                        }
+                                    } else {
+                                        return Err(LuxError::runtime_error(
+                                            &format!("Task {} not found", task_id),
+                                            Some(location.clone()),
+                                        ));
+                                    }
+                                }
+                                _ => {
+                                    return Err(LuxError::runtime_error(
+                                        "await table must contain only task IDs (integers)",
+                                        Some(location.clone()),
+                                    ));
+                                }
+                            }
+                        }
+
+                        // Wait for all threads to complete
+                        for (_tid, handle) in handles {
+                            if let Err(e) = handle.join() {
+                                return Err(LuxError::runtime_error(
+                                    &format!("Task thread panicked: {:?}", e),
+                                    Some(location.clone()),
+                                ));
+                            }
+                        }
+
+                        // Collect results
+                        let mut result_table = TableValue::new();
+
+                        for tid in task_ids_array {
+                            if let Some(task) = self.executor.get_task(tid) {
+                                match task.state {
+                                    TaskState::Completed(result) => {
+                                        result_table.array.push(result);
+                                    }
+                                    TaskState::Failed(msg) => {
+                                        return Err(LuxError::runtime_error(
+                                            &format!("Task {} failed: {}", tid, msg),
+                                            Some(location.clone()),
+                                        ));
+                                    }
+                                    _ => {
+                                        return Err(LuxError::runtime_error(
+                                            &format!("Task {} did not complete", tid),
+                                            Some(location.clone()),
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+
+                        for (key, tid) in task_ids_fields {
+                            if let Some(task) = self.executor.get_task(tid) {
+                                match task.state {
+                                    TaskState::Completed(result) => {
+                                        result_table.fields.insert(key, result);
+                                    }
+                                    TaskState::Failed(msg) => {
+                                        return Err(LuxError::runtime_error(
+                                            &format!("Task {} failed: {}", tid, msg),
+                                            Some(location.clone()),
+                                        ));
+                                    }
+                                    _ => {
+                                        return Err(LuxError::runtime_error(
+                                            &format!("Task {} did not complete", tid),
+                                            Some(location.clone()),
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+
+                        // Return table of results
+                        Ok(Value::Table(result_table))
+                    }
+                    _ => Err(LuxError::runtime_error(
+                        "await expects a task ID (integer) or table of task IDs",
+                        Some(location.clone()),
+                    )),
+                }
             }
         }
     }

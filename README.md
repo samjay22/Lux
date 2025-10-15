@@ -10,20 +10,20 @@ cargo run --release examples/test_features.lux
 
 # View tokenization output
 ./target/release/lux --tokens examples/fib_test.lux
-
+Add 
 # Start REPL
 ./target/release/lux
 ```
 
 ```
 
-TODO: Add documentation for the language syntax and features
+DONE: Add documentation for the language syntax and features
 TODO: Add documentation for the language standard library
-TODO: Add Typing Enforcement
+DONE: Add Typing Enforcement
 TODO: Add tests for the language features
-TODO: Add more examples
+DONE: Add more examples
 TODO: Semantic Analysis
-TODO: Async Runtime
+DONE: Async Runtime
 TODO: VS Code Plugin
 
 ```

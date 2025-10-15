@@ -157,6 +157,18 @@ pub enum Expr {
         body: Vec<Stmt>,
         location: SourceLocation,
     },
+
+    /// Spawn expression: spawn function_call()
+    Spawn {
+        call: Box<Expr>,
+        location: SourceLocation,
+    },
+
+    /// Await expression: await task_id
+    Await {
+        task: Box<Expr>,
+        location: SourceLocation,
+    },
 }
 
 /// Table key (for table literals)

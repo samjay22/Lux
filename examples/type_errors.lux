@@ -1,0 +1,5 @@
+// This file demonstrates type checking errors
+
+// Error: Type mismatch in variable declaration
+local x: int = "hello"  // Should fail: string assigned to int
+
