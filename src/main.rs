@@ -7,7 +7,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::process;
 
-use lux_lang::{run, Lexer, VERSION};
+use lux_lang::{run, run_with_jit, Lexer, VERSION};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -23,12 +23,14 @@ fn main() {
     // Check for flags
     let mut show_tokens = false;
     let mut show_help = false;
+    let mut enable_jit = true; // JIT is now default
     let mut filename: Option<&String> = None;
 
     for arg in &args[1..] {
         match arg.as_str() {
             "--tokens" | "-t" => show_tokens = true,
             "--help" | "-h" => show_help = true,
+            "--no-jit" => enable_jit = false, // Disable JIT
             _ if arg.starts_with('-') => {
                 eprintln!("Unknown flag: {}", arg);
                 print_usage();
@@ -50,7 +52,7 @@ fn main() {
                 process::exit(1);
             }
         } else {
-            if let Err(e) = run_file(file) {
+            if let Err(e) = run_file(file, enable_jit) {
                 eprintln!("{}", e);
                 process::exit(1);
             }
@@ -75,10 +77,12 @@ fn print_help() {
     println!();
     println!("OPTIONS:");
     println!("    -t, --tokens    Show tokenization output (lexer only)");
+    println!("    --no-jit        Disable JIT compilation (use interpreter)");
     println!("    -h, --help      Show this help message");
     println!();
     println!("EXAMPLES:");
-    println!("    lux script.lux           Run a Lux script");
+    println!("    lux script.lux           Run a Lux script (JIT compiled by default)");
+    println!("    lux --no-jit script.lux  Run with interpreter only");
     println!("    lux --tokens script.lux  Show tokens from lexer");
     println!("    lux                      Start interactive REPL");
     println!();
@@ -93,11 +97,11 @@ fn print_help() {
 }
 
 /// Run a Lux script from a file
-fn run_file(filename: &str) -> Result<(), String> {
+fn run_file(filename: &str, enable_jit: bool) -> Result<(), String> {
     let source = fs::read_to_string(filename)
         .map_err(|e| format!("Failed to read file '{}': {}", filename, e))?;
 
-    run(&source, Some(filename))
+    run_with_jit(&source, Some(filename), enable_jit)
         .map_err(|e| format!("{}", e))
 }
 

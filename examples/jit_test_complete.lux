@@ -1,0 +1,29 @@
+// Test complete JIT compilation
+
+fn add(a: int, b: int) -> int {
+    return a + b
+}
+
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+fn main() {
+    print("Testing JIT compilation...")
+    
+    local result := add(10, 20)
+    print(result)
+    
+    local fact := factorial(5)
+    print(fact)
+    
+    for i := 1; i <= 10; i = i + 1 {
+        print(i * i)
+    }
+}
+
+main()
+

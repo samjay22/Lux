@@ -5,11 +5,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use crate::error::{LuxError, LuxResult, SourceLocation};
-use crate::parser::ast::{Ast, Stmt, Expr, BinaryOp, UnaryOp, LogicalOp, Literal, TableKey};
+use crate::parser::ast::{Ast, Stmt, Expr, BinaryOp, UnaryOp, LogicalOp, Literal, TableKey, Type};
 use crate::async_runtime::{AsyncExecutor, TaskState};
 use super::value::{Value, TableValue, FunctionValue, NativeFunctionValue};
 use crate::lexer::Lexer;
 use crate::parser::Parser;
+use crate::compiler::JITCompiler;
 
 /// Environment for variable storage
 #[derive(Debug, Clone)]
@@ -40,7 +41,14 @@ impl Environment {
         }
     }
 
+    #[inline(always)]
     fn get(&self, name: &str) -> Option<Value> {
+        // Optimize for single scope (most common case)
+        if self.scopes.len() == 1 {
+            return self.scopes[0].get(name).cloned();
+        }
+
+        // Multi-scope lookup
         for scope in self.scopes.iter().rev() {
             if let Some(value) = scope.get(name) {
                 return Some(value.clone());
@@ -69,6 +77,9 @@ enum ControlFlow {
     Continue,
 }
 
+/// JIT-compiled function pointer
+type JITFunction = unsafe extern "C" fn(i64, i64, i64, i64, i64) -> i64;
+
 /// Interpreter
 pub struct Interpreter {
     env: Environment,
@@ -76,16 +87,26 @@ pub struct Interpreter {
     executor: Arc<AsyncExecutor>,
     loaded_modules: HashMap<String, bool>,
     current_file_dir: Option<String>,
+    jit_compiler: Option<JITCompiler>,
+    jit_functions: HashMap<String, (*const u8, usize, bool)>, // (function_ptr, arity, returns_bool)
+    jit_enabled: bool,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        Self::with_jit(false)
+    }
+
+    pub fn with_jit(enable_jit: bool) -> Self {
         let mut interpreter = Self {
             env: Environment::new(),
             control_flow: ControlFlow::None,
             executor: Arc::new(AsyncExecutor::new()),
             loaded_modules: HashMap::new(),
             current_file_dir: None,
+            jit_compiler: if enable_jit { Some(JITCompiler::new()) } else { None },
+            jit_functions: HashMap::new(),
+            jit_enabled: enable_jit,
         };
         interpreter.register_builtins();
         interpreter
@@ -631,6 +652,46 @@ impl Interpreter {
                 },
             }),
         );
+
+        // time_now() -> int (returns current time in nanoseconds)
+        self.env.define(
+            "time_now".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "time_now".to_string(),
+                arity: 0,
+                func: |_args| {
+                    use std::time::{SystemTime, UNIX_EPOCH};
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map_err(|e| format!("Time error: {}", e))?;
+                    Ok(Value::Int(now.as_nanos() as i64))
+                },
+            }),
+        );
+
+        // time_elapsed(start: int) -> float (returns elapsed time in milliseconds)
+        self.env.define(
+            "time_elapsed".to_string(),
+            Value::NativeFunction(NativeFunctionValue {
+                name: "time_elapsed".to_string(),
+                arity: 1,
+                func: |args| {
+                    use std::time::{SystemTime, UNIX_EPOCH};
+
+                    if let Value::Int(start_nanos) = args[0] {
+                        let now = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .map_err(|e| format!("Time error: {}", e))?;
+                        let now_nanos = now.as_nanos() as i64;
+                        let elapsed_nanos = now_nanos - start_nanos;
+                        let elapsed_ms = elapsed_nanos as f64 / 1_000_000.0;
+                        Ok(Value::Float(elapsed_ms))
+                    } else {
+                        Err("time_elapsed expects an integer timestamp".to_string())
+                    }
+                },
+            }),
+        );
     }
 
     /// Convert AST to a Value (table structure) that Lux code can work with
@@ -926,7 +987,7 @@ impl Interpreter {
                 Ok(())
             }
 
-            Stmt::FunctionDecl { name, params, body, is_async, .. } => {
+            Stmt::FunctionDecl { name, params, return_type, body, is_async, .. } => {
                 let func = FunctionValue {
                     name: name.clone(),
                     params: params.iter().map(|(n, _)| n.clone()).collect(),
@@ -934,6 +995,32 @@ impl Interpreter {
                     is_async: *is_async,
                 };
                 self.env.define(name.clone(), Value::Function(func));
+
+                // Try to JIT compile if enabled and not async
+                if self.jit_enabled && !is_async {
+                    if let Some(compiler) = &mut self.jit_compiler {
+                        // Convert params to (String, String) format
+                        let jit_params: Vec<(String, String)> = params.iter()
+                            .map(|(n, t)| (n.clone(), format!("{:?}", t)))
+                            .collect();
+
+                        // Check if return type is bool
+                        let returns_bool = matches!(return_type, Some(crate::parser::ast::Type::Bool));
+
+                        // Try to compile, passing existing JIT functions
+                        match compiler.compile_function(name, &jit_params, body, &self.jit_functions) {
+                            Ok(func_ptr) => {
+                                self.jit_functions.insert(name.clone(), (func_ptr, params.len(), returns_bool));
+                                eprintln!("✨ JIT compiled: {}", name);
+                            }
+                            Err(_e) => {
+                                // Silently fall back to interpreter
+                                // Most functions with I/O, strings, tables, etc. will use interpreter
+                            }
+                        }
+                    }
+                }
+
                 Ok(())
             }
 
@@ -1327,6 +1414,9 @@ impl Interpreter {
                                                         executor: executor.clone(),
                                                         loaded_modules: HashMap::new(),
                                                         current_file_dir: None,
+                                                        jit_compiler: None,
+                                                        jit_functions: HashMap::new(),
+                                                        jit_enabled: false,
                                                     };
                                                     task_interp.execute_task(tid, func, args)
                                                 });
@@ -1370,6 +1460,9 @@ impl Interpreter {
                                                         executor: executor.clone(),
                                                         loaded_modules: HashMap::new(),
                                                         current_file_dir: None,
+                                                        jit_compiler: None,
+                                                        jit_functions: HashMap::new(),
+                                                        jit_enabled: false,
                                                     };
                                                     task_interp.execute_task(tid, func, args)
                                                 });
@@ -1461,13 +1554,14 @@ impl Interpreter {
         }
     }
 
+    #[inline(always)]
     fn eval_binary(&self, left: Value, op: &BinaryOp, right: Value, location: &SourceLocation) -> LuxResult<Value> {
         match (left, right) {
             (Value::Int(a), Value::Int(b)) => {
                 Ok(match op {
-                    BinaryOp::Add => Value::Int(a + b),
-                    BinaryOp::Subtract => Value::Int(a - b),
-                    BinaryOp::Multiply => Value::Int(a * b),
+                    BinaryOp::Add => Value::Int(a.wrapping_add(b)),
+                    BinaryOp::Subtract => Value::Int(a.wrapping_sub(b)),
+                    BinaryOp::Multiply => Value::Int(a.wrapping_mul(b)),
                     BinaryOp::Divide => {
                         if b == 0 {
                             return Err(LuxError::runtime_error("Division by zero", Some(location.clone())));
@@ -1571,6 +1665,32 @@ impl Interpreter {
         }
     }
 
+    fn call_function_interpreted(&mut self, user_func: FunctionValue, args: Vec<Value>) -> LuxResult<Value> {
+        // Create new scope for function
+        self.env.push_scope();
+
+        // Bind parameters
+        for (param, arg) in user_func.params.iter().zip(args.iter()) {
+            self.env.define(param.clone(), arg.clone());
+        }
+
+        // Execute function body
+        for stmt in &user_func.body {
+            self.execute_stmt(stmt)?;
+
+            if let ControlFlow::Return(value) = &self.control_flow {
+                let return_value = value.clone();
+                self.control_flow = ControlFlow::None;
+                self.env.pop_scope();
+                return Ok(return_value);
+            }
+        }
+
+        self.env.pop_scope();
+        self.control_flow = ControlFlow::None;
+        Ok(Value::Nil)
+    }
+
     fn call_function(&mut self, func: Value, args: Vec<Value>, location: &SourceLocation) -> LuxResult<Value> {
         match func {
             Value::NativeFunction(native) => {
@@ -1592,29 +1712,41 @@ impl Interpreter {
                     ));
                 }
 
-                // Create new scope for function
-                self.env.push_scope();
+                // Check if JIT-compiled version exists
+                if let Some((func_ptr, _arity, returns_bool)) = self.jit_functions.get(&user_func.name) {
+                    // Verify all arguments are integers
+                    let mut int_args = Vec::new();
+                    for arg in &args {
+                        if let Value::Int(i) = arg {
+                            int_args.push(*i);
+                        } else {
+                            // Fall back to interpreter if non-integer args
+                            eprintln!("⚠️  JIT function {} called with non-integer args, falling back to interpreter", user_func.name);
+                            return self.call_function_interpreted(user_func, args);
+                        }
+                    }
 
-                // Bind parameters
-                for (param, arg) in user_func.params.iter().zip(args.iter()) {
-                    self.env.define(param.clone(), arg.clone());
-                }
+                    // Call JIT-compiled function
+                    // Pad with zeros if fewer than 5 args
+                    while int_args.len() < 5 {
+                        int_args.push(0);
+                    }
 
-                // Execute function body
-                for stmt in &user_func.body {
-                    self.execute_stmt(stmt)?;
+                    let func: unsafe extern "C" fn(i64, i64, i64, i64, i64) -> i64 =
+                        unsafe { std::mem::transmute(*func_ptr) };
 
-                    if let ControlFlow::Return(value) = &self.control_flow {
-                        let return_value = value.clone();
-                        self.control_flow = ControlFlow::None;
-                        self.env.pop_scope();
-                        return Ok(return_value);
+                    let result = unsafe { func(int_args[0], int_args[1], int_args[2], int_args[3], int_args[4]) };
+
+                    // Convert result based on return type
+                    if *returns_bool {
+                        return Ok(Value::Bool(result != 0));
+                    } else {
+                        return Ok(Value::Int(result));
                     }
                 }
 
-                self.env.pop_scope();
-                self.control_flow = ControlFlow::None;
-                Ok(Value::Nil)
+                // Fall back to interpreted execution
+                self.call_function_interpreted(user_func, args)
             }
             _ => Err(LuxError::runtime_error(
                 format!("Cannot call {}", func.type_name()),

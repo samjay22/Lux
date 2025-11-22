@@ -1,0 +1,19 @@
+// Test simple return without if statements
+
+fn add(a: int, b: int) -> int {
+    return a + b
+}
+
+fn multiply(x: int, y: int) -> int {
+    local result: int = x * y
+    return result
+}
+
+print("add(5, 3) = ")
+print(to_string(add(5, 3)))
+print("\n")
+
+print("multiply(4, 7) = ")
+print(to_string(multiply(4, 7)))
+print("\n")
+

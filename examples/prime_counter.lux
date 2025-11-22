@@ -1,0 +1,62 @@
+// Prime Number Counter in Lux
+// Counts prime numbers in a given range with timing
+
+fn is_prime(n: int) -> bool {
+    if n <= 1 {
+        return false
+    }
+    
+    if n == 2 {
+        return true
+    }
+    
+    if n % 2 == 0 {
+        return false
+    }
+
+    local i: int = 3
+    while i * i <= n {
+        if n % i == 0 {
+            return false
+        }
+        i = i + 2
+    }
+
+    return true
+}
+
+fn main() {
+    print("\n=== Prime Number Counter (Lux) ===\n")
+    
+    local startTime := time_now()
+    local startN := 2
+    local endN := 1000000
+    local currentN := startN
+    local primes := 0
+    
+    while currentN <= endN {
+        if is_prime(currentN) {
+            primes = primes + 1
+        }
+        currentN = currentN + 1
+    }
+    
+    local endTime := time_elapsed(startTime)
+
+    print("Range: ")
+    print(to_string(startN))
+    print(" to ")
+    print(to_string(endN))
+    print("\n")
+    
+    print("Primes found: ")
+    print(to_string(primes))
+    print("\n")
+    
+    print("Time: ")
+    print(to_string(endTime))
+    print(" ms\n\n")
+}
+
+main()
+

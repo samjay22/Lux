@@ -318,6 +318,24 @@ impl TypeChecker {
             },
         );
 
+        // time_now() -> int
+        env.define(
+            "time_now".to_string(),
+            Type::Function {
+                params: vec![],
+                return_type: Box::new(Type::Int),
+            },
+        );
+
+        // time_elapsed(start: int) -> float
+        env.define(
+            "time_elapsed".to_string(),
+            Type::Function {
+                params: vec![Type::Int],
+                return_type: Box::new(Type::Float),
+            },
+        );
+
         Self {
             env,
             current_function_return_type: None,

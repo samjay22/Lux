@@ -22,6 +22,7 @@ pub mod parser;
 pub mod types;
 pub mod runtime;
 pub mod async_runtime;
+pub mod compiler;
 
 // Re-export commonly used types
 pub use error::{LuxError, LuxResult, SourceLocation};
@@ -47,6 +48,10 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Returns `Ok(())` if the program executes successfully, or a `LuxError` if
 /// any stage of compilation or execution fails.
 pub fn run(source: &str, filename: Option<&str>) -> LuxResult<()> {
+    run_with_jit(source, filename, false)
+}
+
+pub fn run_with_jit(source: &str, filename: Option<&str>, enable_jit: bool) -> LuxResult<()> {
     // Phase 1: Lexical Analysis
     let mut lexer = Lexer::new(source, filename);
     let tokens = lexer.tokenize()?;
@@ -61,8 +66,8 @@ pub fn run(source: &str, filename: Option<&str>) -> LuxResult<()> {
     // Phase 4: Semantic Analysis (to be implemented)
     // let validated_ast = SemanticAnalyzer::analyze(typed_ast)?;
 
-    // Phase 5: Interpretation
-    let mut interpreter = runtime::Interpreter::new();
+    // Phase 5: Interpretation (with optional JIT compilation)
+    let mut interpreter = runtime::Interpreter::with_jit(enable_jit);
     interpreter.interpret(&ast)?;
 
     Ok(())

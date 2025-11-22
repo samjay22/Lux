@@ -220,6 +220,27 @@ impl Parser {
         // Initializer
         let initializer = if self.match_keyword(Keyword::Local) {
             Some(Box::new(self.var_declaration(false)?))
+        } else if self.check(TokenType::Identifier) {
+            // Check if this is an implicit local declaration (i := 0)
+            let checkpoint = self.current;
+            let name = self.advance().lexeme.clone();
+
+            if self.match_token(TokenType::ColonAssign) {
+                // This is an implicit local declaration
+                let init_location = self.previous().location.clone();
+                let initializer_expr = Some(self.expression()?);
+                Some(Box::new(Stmt::VarDecl {
+                    name,
+                    type_annotation: None,
+                    initializer: initializer_expr,
+                    is_const: false,
+                    location: init_location,
+                }))
+            } else {
+                // Not a declaration, backtrack and parse as expression
+                self.current = checkpoint;
+                Some(Box::new(self.expression_statement()?))
+            }
         } else if !self.check(TokenType::Semicolon) {
             Some(Box::new(self.expression_statement()?))
         } else {

@@ -11,6 +11,12 @@ license = "MIT"
 colored = "2.1"
 # For async runtime (will be used in later phases)
 tokio = { version = "1.35", features = ["full"], optional = true }
+# For AOT/JIT compilation
+cranelift = "0.109"
+cranelift-module = "0.109"
+cranelift-jit = "0.109"
+cranelift-native = "0.109"
+target-lexicon = "0.12"
 
 [dev-dependencies]
 # For testing
